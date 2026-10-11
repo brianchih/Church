@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主日講道訊息彙整與跨篇比較</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #2980b9;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --border-color: #e9ecef;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        header p {
+            margin: 0.5rem 0 0 0;
+            opacity: 0.8;
+            font-size: 0.95rem;
+        }
+
+        /* 導覽分頁按鈕 */
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            background-color: #ffffff;
+            border-bottom: 2px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 1rem 1.2rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab-btn:hover {
+            color: var(--accent-color);
+            background-color: #f1f3f5;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
+            background-color: #ffffff;
+        }
+
+        /* 頁面內容區域 */
+        .container {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .page-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .page-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 0.5rem;
+            margin-top: 0;
+        }
+
+        h3 {
+            color: var(--accent-color);
+            margin-top: 1.5rem;
+        }
+
+        blockquote {
+            background-color: #eef6fb;
+            border-left: 4px solid var(--accent-color);
+            margin: 1rem 0;
+            padding: 0.8rem 1.2rem;
+            font-style: italic;
+            border-radius: 0 4px 4px 0;
+        }
+
+        ul, ol {
+            padding-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* 比較表格樣式 */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background-color: #ffffff;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 0.8rem 1rem;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: #f1f3f5;
+            color: var(--primary-color);
+            font-weight: 700;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .highlight-box {
+            background-color: #fff9db;
+            border: 1px solid #ffe066;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #6c757d;
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>主日訊息系列專題</h1>
+    <p>尊主為大、神的時間、屬靈生命與基督徒生活實踐彙整</p>
+</header>
+
+<!-- 分頁頁籤按鈕 -->
+<nav class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab(0)">1. 耶穌的順服</button>
+    <button class="tab-btn" onclick="switchTab(1)">2. 至高之處與尊主為大</button>
+    <button class="tab-btn" onclick="switchTab(2)">3. 重拾安息日恩典</button>
+    <button class="tab-btn" onclick="switchTab(3)">4. 金錢奉獻與生命擺上</button>
+    <button class="tab-btn" onclick="switchTab(4)">5. 詩篇16篇：真正的好處</button>
+    <button class="tab-btn" onclick="switchTab(5)">6. 宣教的教會與宣教</button>
+    <button class="tab-btn" onclick="switchTab(6)">7. 主耶穌降生的奧祕</button>
+    <button class="tab-btn" onclick="switchTab(7)" style="color: #d9534f;">★ 跨篇穿插比較彙總</button>
+</nav>
+
+<div class="container">
+
+    <!-- 第一篇 -->
+    <div class="page-content active" id="page-0">
+        <div class="card">
+            <h2>主耶穌賜福的樣式——順服的榜樣</h2>
+            <h3>一、 至死存心的順服（腓 2:6-8）</h3>
+            <blockquote>「他本有神的形象，不以自己與神同等為強奪的；反倒虛己，取了奴僕的形象，成為人的樣式...」</blockquote>
+            <ul>
+                <li><strong>不堅持同等地位：</strong> 本與神同等，卻甘願降卑承受十字架咒詛，除掉人類的咒詛。</li>
+                <li><strong>反倒虛己：</strong> 隱藏神性、道成肉身，願意受限於時間與肉體，無所不知的主甘願成為有限的知。</li>
+                <li><strong>奴僕形象與客西馬尼：</strong> 生於馬槽、長於木匠家，面對極大痛苦仍禱告：「不要成就我的意思，只要成就你的意思。」</li>
+            </ul>
+
+            <h3>二、 順服地上的父母（路 2:41-51）</h3>
+            <ul>
+                <li>12歲在殿中「以父的事為念」，但隨後回到拿撒勒<strong>「順從地上的父母」</strong>直至30歲出來傳道。</li>
+                <li><strong>屬靈教導：</strong> 先順服地上的父母，再順服天上的父；偉大的抱負當從善盡家庭責任開始。</li>
+            </ul>
+
+            <h3>三、 順從諸般的義與體制（太 3:13-17, 17:24-27）</h3>
+            <ul>
+                <li><strong>接受洗禮：</strong> 無罪的主甘願屈尊受洗，肯定約翰的職事，天父以「這是我的愛子」印證。</li>
+                <li><strong>納丁稅（殿稅）：</strong> 作為神子本可免稅，但為了「不觸犯/絆倒人」，吩咐彼得去魚口取銀錢納稅，展現體諒與順服。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第二篇 -->
+    <div class="page-content" id="page-1">
+        <div class="card">
+            <h2>至高之處與尊主為大</h2>
+            <h3>一、 四個屬靈定律與神奇妙的計劃</h3>
+            <ul>
+                <li>神對我們的一生有大視野（跨越生死與時空），從至高之處看見我們的全貌。</li>
+            </ul>
+
+            <h3>二、 天開了：至高之處臨到人間（約 1:47-51）</h3>
+            <ul>
+                <li><strong>拿旦業的經歷：</strong> 耶穌指出在「無花果樹下」已看見他（察驗他在隱密處為國度復興的禱告）。</li>
+                <li><strong>天開了：</strong> 基督是天地的梯子，至高之處已降臨在地、居住在我們心裡。</li>
+            </ul>
+
+            <h3>三、 屬靈前輩的見證與神學平衡</h3>
+            <ul>
+                <li><strong>宋尚節與喬治·福克斯：</strong> 天門永遠敞開，神能直接對我們的困境說話。</li>
+                <li><strong>苦難與豐盛神學：</strong> 上帝在患難中拯救（天父的心態）；斷開罪惡鎖鏈後賜智慧能力正當經營，使我們有餘能分給他人（豐盛神學 ≠ 成功神學）。</li>
+            </ul>
+
+            <h3>四、 瑪利亞的尊主頌（路 1:39-55）</h3>
+            <ul>
+                <li><strong>「我心尊主為大」：</strong> 馬利亞面對未婚懷孕的極大社會壓力，戰勝焦慮的秘訣就是將信心調頻至「看見主的至大」。</li>
+                <li><strong>翻轉萬有：</strong> 神顧念卑微者，趕散狂傲人，使有權位的失位、飢餓的得飽美食。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第三篇 -->
+    <div class="page-content" id="page-2">
+        <div class="card">
+            <h2>尊主為大系列——重拾安息日的恩典</h2>
+            <h3>一、 現代人的困境：被科技與多工作業綁架</h3>
+            <ul>
+                <li>智慧裝置帶來便利，卻將人拉入「隨時待命」的焦慮中。</li>
+                <li>身體跑得太快，把靈魂拋在了後面，導致社交孤立與內心乾渴。</li>
+            </ul>
+
+            <h3>二、 安息日的真諦：讓靈魂追上身體</h3>
+            <ul>
+                <li><strong>赫舍爾（Abraham Heschel）：</strong> 「時間是一條流逝的河，但安息日是河中靜止的深潭。」</li>
+                <li><strong>創世即設立：</strong> 安息日與婚姻是墮落前即設立的生命節奏，非功利主義下為了「維修充電以再提高產能」的工具。</li>
+                <li><strong>樂譜上的休止符：</strong> 忽略安息就像唱歌跳過修止符，會失去樂曲和諧。</li>
+            </ul>
+
+            <h3>三、 耕種與收割時仍要安息（出 34:21）</h3>
+            <ul>
+                <li>在農夫生死攸關的黃金時間命令停工，是強迫人鬆開緊抓世界的雙手，面對內心控制欲，經歷神的信實與供給（詩 127:1）。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第四篇 -->
+    <div class="page-content" id="page-3">
+        <div class="card">
+            <h2>金錢奉獻與生命的擺上</h2>
+            <h3>一、 舊約與新約奉獻觀的演進</h3>
+            <ul>
+                <li><strong>律法前的十一：</strong> 亞伯拉罕與雅各的奉獻是出於感恩與承認神的主權。</li>
+                <li><strong>律法中的十一：</strong> 含利未人、節期歡慶、慈惠三種，年均奉獻約 25%。</li>
+                <li><strong>新約的提升：</strong> 從外在金額轉為內心動機。窮寡婦獻上養生的一切（信心）；不要為了人的稱讚而張揚（暗中奉獻）；不能事奉神又事奉瑪門。</li>
+            </ul>
+
+            <h3>二、 正確理解馬拉基書 3:10「以此試試我」</h3>
+            <ul>
+                <li>非人用奉獻賄賂或試探神，而是神邀請信徒在<strong>順服的應許邊界內</strong>，經歷神話語與供應的真實。</li>
+            </ul>
+
+            <h3>三、 終極實踐：將身體獻上（羅 12:1）</h3>
+            <ul>
+                <li>金錢奉獻是身體奉獻的延伸。獻祭的動力來自經歷「神的慈悲/憐憫」，全人生活（工作、家庭、休息）皆為分別為聖的服事。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第五篇 -->
+    <div class="page-content" id="page-4">
+        <div class="card">
+            <h2>詩篇16篇：真正的好處</h2>
+            <h3>一、 追求的好處與偶像的實相</h3>
+            <ul>
+                <li>世上物質（新車、手機、成就）拿到手便開始變舊，無法帶來永恆滿足。</li>
+                <li><strong>偶像（提摩太·凱勒）：</strong> 任何比神更吸引你、佔據心靈核心的事物。以別物代替耶和華，結果是「愁苦加增」（事奉金錢、成就、服事被需要感皆可能成為偶像）。</li>
+                <li><strong>卡內基的警示：</strong> 靠個人道德或立誌無法拔除對財富偶像的崇拜，唯有神能拯救。</li>
+            </ul>
+
+            <h3>二、 真正的幸福與生命次序（詩 16:5-8）</h3>
+            <blockquote>「在你以外，沒有真正的好處...耶和華是我的產業，是我杯中的分。」</blockquote>
+            <ul>
+                <li><strong>十誡的次序校正：</strong> 1. 與神的關係 → 2. 家庭 → 3. 鄰舍關係 → 4. 物質產業。現代人常將次序倒置，導致生命混亂。</li>
+                <li>將耶和華常擺在面前，便能在神的佳美地界中享受真知足。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第六篇 -->
+    <div class="page-content" id="page-5">
+        <div class="card">
+            <h2>宣教的教會與教會的宣教</h2>
+            <h3>一、 後基督教時代與宣教 DNA</h3>
+            <ul>
+                <li><strong>紐比真（Newbigin）的警示：</strong> 西方社會高度世俗化，昔日基督教國家現已成為「新的宣教工場」。</li>
+                <li><strong>宣教是教會的 DNA：</strong> 初代使徒皆為宣教士且多殉道（彼得倒釘十字架、保羅斬首三泉堂），宣教士的血是教會蓬勃的種子。</li>
+            </ul>
+
+            <h3>二、 保羅的宣教心志與後盾（羅 15-16章）</h3>
+            <ul>
+                <li>羅馬教會具多元族群（男女、貴族奴隸、各民族）與地下家庭教會特質。</li>
+                <li>保羅服事24年後，將眼光投向當時的地極——<strong>西班牙</strong>，並以羅馬教會作為宣教後盾。</li>
+                <li><strong>廣義宣教：</strong> 不僅指親自差派，凡關心、支持、禱告、參與宣教後盾者，皆為「宣教的教會」。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第七篇 -->
+    <div class="page-content" id="page-6">
+        <div class="card">
+            <h2>神的時候滿足——主耶穌降生的奧祕與恩典</h2>
+            <h3>一、 神的時候滿足（加 4:4, 路 2:1-3）</h3>
+            <ul>
+                <li><strong>歷史掌管在神手中：</strong> 凱撒奧古斯都開啟「羅馬和平」，下令報名上冊，看似皇帝做主，實為成就神救贖預言。</li>
+                <li><strong>天時地利人和：</strong> 完善道路系統、希臘文普及、巴勒斯坦居歐亞非核心，為福音傳播預備環境。</li>
+            </ul>
+
+            <h3>二、 童貞女懷孕與降生伯利恆</h3>
+            <ul>
+                <li><strong>訂婚未婚的時間點：</strong> 保全童女身份，亦讓約瑟合理保護。</li>
+                <li><strong>神人二性與無原罪：</strong> 聖靈感孕隔絕亞當原罪，兼具完全神性與體恤人的真實人性。</li>
+                <li><strong>生命的糧與好牧人：</strong> 降生於「糧食之家」伯利恆與冰冷馬槽，向卑微牧羊人報信，顯明神對貧困困苦者的救贖與親近。</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第八篇：跨篇穿插比較頁面 -->
+    <div class="page-content" id="page-7">
+        <div class="card">
+            <h2>★ 跨篇訊息穿插比較與核心主題交叉分析</h2>
+            <p>本頁將七篇主日訊息進行橫向與縱向的對比整理，觀察不同主題間如何彼此呼應、交織出完整的基督徒生命藍圖。</p>
+
+            <h3>一、 核心概念跨篇比較表</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>篇目與主題</th>
+                            <th>核心神學觀點</th>
+                            <th>生命實踐/挑戰</th>
+                            <th>對應屬靈經典/經文</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1. 耶穌的順服</strong></td>
+                            <td>基督的虛己與道成肉身</td>
+                            <td>順服家庭、環境與天父旨意，放下特權</td>
+                            <td>腓立比書 2:6-8</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. 至高之處與尊主為大</strong></td>
+                            <td>天門開啟，神掌管歷史與患難</td>
+                            <td>將信心調頻至「主的至大」，勝過環境壓力</td>
+                            <td>路加福音 1:39-55 (馬利亞)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>3. 重拾安息日恩典</strong></td>
+                            <td>安息是生命節奏而非功能充電</td>
+                            <td>放下控制欲，不跟神搶時間，讓靈魂追上身體</td>
+                            <td>赫舍爾《安息日的真諦》/ 出 34:21</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. 金錢奉獻與生命擺上</strong></td>
+                            <td>金錢奉獻是身體活祭的延伸</td>
+                            <td>不跟神討價還價，獻上時間與全人主權</td>
+                            <td>羅馬書 12:1 / 馬拉基書 3:10</td>
+                        </tr>
+                        <tr>
+                            <td><strong>5. 詩篇16篇：真正的好處</strong></td>
+                            <td>除神以外無真正好處，拔除偶像</td>
+                            <td>校正被倒置的生命次序（神>家庭>鄰舍>物質）</td>
+                            <td>提摩太·凱勒《諸神的面具》/ 詩篇 16</td>
+                        </tr>
+                        <tr>
+                            <td><strong>6. 宣教的教會與宣教</strong></td>
+                            <td>宣教是教會的 DNA 與存續價值</td>
+                            <td>打破牆垣，成為宣教前線與後盾，傳到地極</td>
+                            <td>羅馬書 15-16章 / 紐比真</td>
+                        </tr>
+                        <tr>
+                            <td><strong>7. 主耶穌降生的奧祕</strong></td>
+                            <td>神的時候滿足，歷史由神掌管</td>
+                            <td>在「今天」接受耶穌為救主、主與基督</td>
+                            <td>加拉太書 4:4 / 路加福音 2:1-20</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>二、 穿插比較：三大核心命題的縱橫對照</h3>
+
+            <div class="highlight-box">
+                <h4>1. 「時間的主權」：安息日 vs. 奉獻 vs. 神的時間（篇章 3, 4, 7）</h4>
+                <ul>
+                    <li><strong>安息日（篇3）：</strong> 挑戰我們是否願意將<strong>每週的時間</strong>交出，停止焦慮耕作，信靠神的供給。</li>
+                    <li><strong>金錢奉獻（篇4）：</strong> 強調最珍貴的禮物就是<strong>時間與生命</strong>，金錢只是全人擺上的延伸。</li>
+                    <li><strong>神的時候滿足（篇7）：</strong> 提醒我們歷史與個人生命都有<strong>神定規的最佳時間點</strong>（如羅馬和平期與主降生），人只需順服與等待。</li>
+                </ul>
+            </div>
+
+            <div class="highlight-box" style="background-color: #eebfda33; border-color: #f783ac;">
+                <h4>2. 「偶像與價值的翻轉」：尊主為大 vs. 偶像拔除 vs. 降卑順服（篇章 1, 2, 5）</h4>
+                <ul>
+                    <li><strong>耶穌的樣式（篇1）：</strong> 主以最高的地位選擇降卑為奴僕，顛覆世俗對「權能與成功」的定義。</li>
+                    <li><strong>尊主為大（篇2）：</strong> 馬利亞在極大壓力下選擇「尊主為大」，使高位的失位、卑微的升高。</li>
+                    <li><strong>拔除偶像（篇5）：</strong> 揭露金錢、成就與人際認同若置於神之上，便會成為帶來愁苦的偶像（如卡內基的悔恨），唯有將神擺在首位才能恢復秩序。</li>
+                </ul>
+            </div>
+
+            <div class="highlight-box" style="background-color: #d3f9d8; border-color: #8ce99a;">
+                <h4>3. 「國度與使命的連結」：天開了 vs. 宣教 DNA vs. 降生的救恩（篇章 2, 6, 7）</h4>
+                <ul>
+                    <li><strong>天開了（篇2）：</strong> 基督開闢了天地的連接，使至高之處的大能與天使臨到地上。</li>
+                    <li><strong>宣教使命（篇6）：</strong> 教會不能停留在牆內，必須承接初代使徒殉道流血的宣教 DNA，將天開的福音傳至地極。</li>
+                    <li><strong>降生的救恩（篇7）：</strong> 基督降生伯利恆並向卑微牧羊人報信，正是宣教的起點——好牧人尋找並拯救失喪困苦的群羊。</li>
+                </ul>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    <p>主日講道訊息摘要整理版 &copy; 2026 | 閱讀與默想筆記</p>
+</footer>
+
+<script>
+    function switchTab(index) {
+        // 隱藏所有分頁內容
+        const pages = document.querySelectorAll('.page-content');
+        pages.forEach(page => page.classList.remove('active'));
+
+        // 取消所有按鈕 active 狀態
+        const btns = document.querySelectorAll('.tab-btn');
+        btns.forEach(btn => btn.classList.remove('active'));
+
+        // 顯示目標頁面與按鈕高亮
+        document.getElementById(`page-${index}`).classList.add('active');
+        btns[index].classList.add('active');
+
+        // 平滑滾動至頁面頂部
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+</script>
+
+</body>
+</html>

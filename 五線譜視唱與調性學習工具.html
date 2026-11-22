@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五線譜視唱與調性學習工具 | 歌唱初學者互動教室</title>
+    <!-- 引入 Tailwind CSS 與 Google Fonts (Noto Sans TC, Inter) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 自訂捲軸樣式，讓五線譜橫向捲動更美觀 */
+        .staff-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .staff-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .staff-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .staff-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* 音符懸停與高亮過渡 */
+        .note-group {
+            transition: transform 0.1s ease;
+        }
+        .note-group:hover {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200">
+                    <!-- 音樂符號 SVG -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">五線譜視唱與調性學習教室</h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">點擊五線譜放置音符 · 即時聆聽音高與首調唱名</p>
+                </div>
+            </div>
+
+            <!-- 範例旋律與清空按鈕 -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+                    <span class="text-xs font-medium text-slate-500 px-2">載入範例：</span>
+                    <button onclick="loadPreset('scale')" class="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white text-slate-700 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 transition">當前音階</button>
+                    <button onclick="loadPreset('twinkle')" class="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-700 hover:bg-white hover:text-indigo-600 transition ml-1">小星星</button>
+                    <button onclick="loadPreset('ode')" class="px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-700 hover:bg-white hover:text-indigo-600 transition ml-1">歡樂頌</button>
+                </div>
+                <button onclick="clearNotes()" class="px-3 py-2 text-xs font-medium rounded-xl bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    清空樂譜
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+
+        <!-- 系統提示/訊息橫幅 (取代 alert) -->
+        <div id="toastBanner" class="hidden fixed bottom-5 right-5 z-50 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 transition-opacity duration-300">
+            <span id="toastIcon" class="text-indigo-400">●</span>
+            <span id="toastMessage">訊息提示</span>
+        </div>
+
+        <!-- 控制面板網格：調性選擇 & 定調輔助 + 播放控制 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- 左側：調性選擇與定調工具 (佔 7 欄) -->
+            <div class="lg:col-span-7 bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between gap-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <label for="keySelect" class="block text-xs font-bold uppercase tracking-wider text-indigo-600 mb-1">1. 選擇調性 (Key Signature)</label>
+                        <select id="keySelect" onchange="handleKeyChange()" class="w-full sm:w-64 bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                            <optgroup label="大調 (Major Keys)">
+                                <option value="C_major" selected>C 大調 (無升降記號)</option>
+                                <option value="G_major">G 大調 (1個升記號: F♯)</option>
+                                <option value="D_major">D 大調 (2個升記號: F♯, C♯)</option>
+                                <option value="A_major">A 大調 (3個升記號: F♯, C♯, G♯)</option>
+                                <option value="E_major">E 大調 (4個升記號: F♯, C♯, G♯, D♯)</option>
+                                <option value="F_major">F 大調 (1個降記號: B♭)</option>
+                                <option value="Bb_major">B♭ 大調 (2個降記號: B♭, E♭)</option>
+                                <option value="Eb_major">E♭ 大調 (3個降記號: B♭, E♭, A♭)</option>
+                            </optgroup>
+                            <optgroup label="自然小調 (Natural Minor Keys)">
+                                <option value="A_minor">a 小調 (無升降記號 - 關係小調 C大調)</option>
+                                <option value="E_minor">e 小調 (1個升記號: F♯ - 關係小調 G大調)</option>
+                                <option value="B_minor">b 小調 (2個升記號: F♯, C♯ - 關係小調 D大調)</option>
+                                <option value="D_minor">d 小調 (1個降記號: B♭ - 關係小調 F大調)</option>
+                                <option value="G_minor">g 小調 (2個降記號: B♭, E♭ - 關係小調 B♭大調)</option>
+                                <option value="C_minor">c 小調 (3個降記號: B♭, E♭, A♭ - 關係小調 E♭大調)</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <!-- 當前調性主音資訊卡 -->
+                    <div class="bg-indigo-50/80 border border-indigo-100 rounded-xl px-4 py-2.5 flex-1 min-w-[200px]">
+                        <div class="text-xs text-indigo-600 font-semibold">首調主音 (Movable Do) 位置提示</div>
+                        <div id="keyInfoText" class="text-sm font-bold text-slate-800 mt-0.5">主音 Do = C（高音譜下加一線 C4 / 低音譜第二間 C3）</div>
+                        <div id="keySigDetail" class="text-xs text-slate-500 mt-0.5">調號影響：無（所有音皆為自然音）</div>
+                    </div>
+                </div>
+
+                <!-- 定調輔助按鈕 (播放音階 / 主和弦) -->
+                <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">歌唱前先定調抓音準：</span>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="playTonicTriad()" class="px-3.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-xs font-bold flex items-center gap-1.5 transition shadow-xs">
+                            <span>🎹</span> 播放主和弦 (Do-Mi-Sol)
+                        </button>
+                        <button onclick="playCurrentScale()" class="px-3.5 py-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 text-xs font-bold flex items-center gap-1.5 transition shadow-xs">
+                            <span>🎼</span> 播放該調性音階
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側：播放器與音色控制 (佔 5 欄) -->
+            <div class="lg:col-span-5 bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between gap-4">
+                <div>
+                    <span class="block text-xs font-bold uppercase tracking-wider text-emerald-600 mb-2">2. 樂譜播放與人聲合成器</span>
+                    <div class="flex items-center gap-2.5">
+                        <button id="playAllBtn" onclick="togglePlayAll()" class="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition">
+                            <svg id="playIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                            <span id="playBtnText">依序播放全部音符</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                    <!-- 音色選擇 -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">合成器音色</label>
+                        <select id="timbreSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="piano">🎹 溫暖電鋼琴 (推薦定音)</option>
+                            <option value="vocal_ah">🗣️ 柔和人聲母音「啊 Ah」</option>
+                            <option value="vocal_oo">🎵 圓潤人聲母音「嗚 Oo」</option>
+                        </select>
+                    </div>
+
+                    <!-- BPM 速度調整 -->
+                    <div>
+                        <div class="flex justify-between text-xs font-medium text-slate-500 mb-1">
+                            <span>播放速度</span>
+                            <span id="bpmDisplay" class="font-bold text-indigo-600">90 BPM</span>
+                        </div>
+                        <input id="bpmSlider" type="range" min="50" max="150" value="90" oninput="updateBpm(this.value)" class="w-full accent-indigo-600 cursor-pointer mt-1">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工具列：編輯模式、音符時值、臨時升降記號、唱名標注切換 -->
+        <div class="bg-white rounded-2xl p-3.5 sm:px-5 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- 左組：操作模式與時值 -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <!-- 模式切換 -->
+                <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button id="modeAddBtn" onclick="setToolMode('add')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs transition flex items-center gap-1">
+                        <span>✏️</span> 放置音符
+                    </button>
+                    <button id="modeEraseBtn" onclick="setToolMode('erase')" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1">
+                        <span>🧹</span> 橡皮擦
+                    </button>
+                </div>
+
+                <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+                <!-- 音符時值 -->
+                <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200" title="選擇音符長度">
+                    <button onclick="setDuration(4)" data-dur="4" class="dur-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">𝅝 全音符</button>
+                    <button onclick="setDuration(2)" data-dur="2" class="dur-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">𝅗𝅥 二分</button>
+                    <button onclick="setDuration(1)" data-dur="1" class="dur-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-indigo-600 shadow-xs transition">♩ 四分</button>
+                    <button onclick="setDuration(0.5)" data-dur="0.5" class="dur-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">♪ 八分</button>
+                </div>
+
+                <!-- 臨時升降記號 -->
+                <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200" title="臨時記號（覆蓋調號）">
+                    <button onclick="setAccidental('none')" data-acc="none" class="acc-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-indigo-600 shadow-xs transition">依調號</button>
+                    <button onclick="setAccidental('sharp')" data-acc="sharp" class="acc-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">♯ 升</button>
+                    <button onclick="setAccidental('flat')" data-acc="flat" class="acc-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">♭ 降</button>
+                    <button onclick="setAccidental('natural')" data-acc="natural" class="acc-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition">♮ 還原</button>
+                </div>
+            </div>
+
+            <!-- 右組：唱名標注顯示模式 -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-slate-500">唱名標注：</span>
+                <select id="labelModeSelect" onchange="renderStaff()" class="bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="both" selected>首調唱名 + 固定調音名 (推薦)</option>
+                    <option value="movable">僅顯示首調唱名 (Do Re Mi...)</option>
+                    <option value="fixed">僅顯示固定調音名 (C4 D4...)</option>
+                    <option value="none">隱藏標注 (自我視唱測驗)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 五線譜互動畫布區域 (Grand Staff SVG) -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <!-- 狀態列與即時游標音高預覽 -->
+            <div class="bg-slate-50 px-4 sm:px-6 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 text-slate-600">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>提示：在下方<strong>高音譜表</strong>（女聲/高音域）或<strong>低音譜表</strong>（男聲/低音域）任意線或間點擊即可新增音符；點擊已存在的音符可聆聽或刪除。</span>
+                </div>
+                <div id="hoverPitchIndicator" class="font-mono font-bold text-indigo-700 bg-indigo-100/80 px-3 py-1 rounded-lg">
+                    游標位置：請移動至五線譜上
+                </div>
+            </div>
+
+            <!-- 可橫向捲動的五線譜容器 -->
+            <div id="staffScrollContainer" class="staff-scroll overflow-x-auto w-full bg-white relative">
+                <svg id="grandStaffSvg" class="block select-none touch-manipulation" xmlns="http://www.w3.org/2000/svg">
+                    <!-- 動態由 JavaScript 繪製高音譜、低音譜、調號、音符與標注 -->
+                </svg>
+            </div>
+        </div>
+
+        <!-- 歌唱初學者視唱小百科 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600">
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h3 class="font-bold text-slate-800 text-sm mb-1.5 flex items-center gap-1.5">
+                    <span class="text-indigo-600">💡</span> 什麼是「首調唱名法 (Movable Do)」？
+                </h3>
+                <p class="leading-relaxed">
+                    流行與合唱視唱最常用的方法！無論樂曲是什麼調，該調的<strong>主音（第一級音）都唱作 Do</strong>。例如在 G 大調中，G 音就唱作 Do，A 唱作 Re。這能幫助大腦快速建立相對音感與旋律線條感。
+                </p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h3 class="font-bold text-slate-800 text-sm mb-1.5 flex items-center gap-1.5">
+                    <span class="text-teal-600">🎤</span> 高音譜表 vs 低音譜表音域
+                </h3>
+                <p class="leading-relaxed">
+                    <strong>高音譜表（上方）</strong>適合女高音、女中音及男高音（常記高八度）；<strong>低音譜表（下方）</strong>適合男中音與男低音。兩者中間由<strong>中央 C（C4）</strong>連接，本工具可自由在兩譜表間切換練習。
+                </p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h3 class="font-bold text-slate-800 text-sm mb-1.5 flex items-center gap-1.5">
+                    <span class="text-amber-600">🎶</span> 半音階變化唱名對照
+                </h3>
+                <p class="leading-relaxed">
+                    遇到臨時升記號時，母音通常變為 <strong>i</strong>（如升Do唱 <strong>Di</strong>、升Fa唱 <strong>Fi</strong>）；遇到臨時降記號時，母音通常變為 <strong>e</strong> 或 <strong>a</strong>（如降Mi唱 <strong>Me</strong>、降Si唱 <strong>Te</strong>），系統會自動為您標注！
+                </p>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. 音樂理論與調性資料庫 (Music Theory & Key Signatures)
+         * ============================================================================
+         */
+        const LETTER_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+        // 自然音級相對於 C 的半音偏移量
+        const NATURAL_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+        // 首調唱名對照表 (以主音為 0 半音計算)
+        // [上行/升記號傾向唱名, 下行/降記號傾向唱名]
+        const MOVABLE_DO_MAP = {
+            0:  ['Do', 'Do'],
+            1:  ['Di', 'Ra'],
+            2:  ['Re', 'Re'],
+            3:  ['Ri', 'Me'],
+            4:  ['Mi', 'Mi'],
+            5:  ['Fa', 'Fa'],
+            6:  ['Fi', 'Se'],
+            7:  ['Sol', 'Sol'],
+            8:  ['Si', 'Le'],
+            9:  ['La', 'La'],
+            10: ['Li', 'Te'],
+            11: ['Ti', 'Ti'] // 傳統視唱亦常唱 Si，此處提供 Ti/Si 清晰區分升Sol(Si)與第七級(Si/Ti)，初學者習慣我們將第11半音標為 Si(Ti) 或 Si
+        };
+        // 針對台灣/華語歌唱教學習慣，自然音階第七級習慣唱 Si，升 Sol 唱 Si# 或 Di/Fi 區隔，這裡特別優化自然大調音階顯示為 Do Re Mi Fa Sol La Si
+        const DIATONIC_SOLFEGE = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si'];
+
+        // 調性定義表
+        // tonicSemitone: 主音的半音值 (C=0 ... B=11)
+        // type: 'sharp' | 'flat' | 'none'
+        // count: 升降記號數量
+        // affected: 受調號影響的音名陣列
+        const KEY_SIGNATURES = {
+            // 大調
+            'C_major':  { name: 'C 大調',  mode: 'major', tonic: 'C', tonicSemi: 0,  type: 'none',  count: 0, affected: [], desc: '主音 Do = C（高音譜下加一線 C4 / 低音譜第二間 C3）', detail: '無升降記號，全部使用白鍵自然音。' },
+            'G_major':  { name: 'G 大調',  mode: 'major', tonic: 'G', tonicSemi: 7,  type: 'sharp', count: 1, affected: ['F'], desc: '主音 Do = G（高音譜第二線 G4 / 低音譜第一線 G2）', detail: '調號：1 個升記號（所有 F 音自動升半音為 F♯）。' },
+            'D_major':  { name: 'D 大調',  mode: 'major', tonic: 'D', tonicSemi: 2,  type: 'sharp', count: 2, affected: ['F', 'C'], desc: '主音 Do = D（高音譜下加一間 D4 / 低音譜第三線 D3）', detail: '調號：2 個升記號（F♯, C♯）。' },
+            'A_major':  { name: 'A 大調',  mode: 'major', tonic: 'A', tonicSemi: 9,  type: 'sharp', count: 3, affected: ['F', 'C', 'G'], desc: '主音 Do = A（高音譜第二間 A4 / 低音譜第一間 A2）', detail: '調號：3 個升記號（F♯, C♯, G♯）。' },
+            'E_major':  { name: 'E 大調',  mode: 'major', tonic: 'E', tonicSemi: 4,  type: 'sharp', count: 4, affected: ['F', 'C', 'G', 'D'], desc: '主音 Do = E（高音譜第一線 E4 / 低音譜第三間 E3）', detail: '調號：4 個升記號（F♯, C♯, G♯, D♯）。' },
+            'F_major':  { name: 'F 大調',  mode: 'major', tonic: 'F', tonicSemi: 5,  type: 'flat',  count: 1, affected: ['B'], desc: '主音 Do = F（高音譜第一間 F4 / 低音譜第四線 F3）', detail: '調號：1 個降記號（所有 B 音自動降半音為 B♭）。' },
+            'Bb_major': { name: 'B♭ 大調', mode: 'major', tonic: 'B', tonicSemi: 10, type: 'flat',  count: 2, affected: ['B', 'E'], desc: '主音 Do = B♭（高音譜第三線 B♭4 / 低音譜第二線 B♭2）', detail: '調號：2 個降記號（B♭, E♭）。' },
+            'Eb_major': { name: 'E♭ 大調', mode: 'major', tonic: 'E', tonicSemi: 3,  type: 'flat',  count: 3, affected: ['B', 'E', 'A'], desc: '主音 Do = E♭（高音譜第一線 E♭4 / 低音譜第三間 E♭3）', detail: '調號：3 個降記號（B♭, E♭, A♭）。' },
+            
+            // 自然小調 (首調唱名法中，小調主音通常唱作 La，其關係大調主音唱作 Do，對歌唱者最直覺！)
+            'A_minor':  { name: 'a 小調',  mode: 'minor', tonic: 'A', tonicSemi: 9,  relMajorSemi: 0,  type: 'none',  count: 0, affected: [], desc: '小調主音 La = A（關係大調 C 大調，Do = C）', detail: '無升降記號，小調主音為 A（唱作 La）。' },
+            'E_minor':  { name: 'e 小調',  mode: 'minor', tonic: 'E', tonicSemi: 4,  relMajorSemi: 7,  type: 'sharp', count: 1, affected: ['F'], desc: '小調主音 La = E（關係大調 G 大調，Do = G）', detail: '調號：1 個升記號（F♯），小調主音為 E（唱作 La）。' },
+            'B_minor':  { name: 'b 小調',  mode: 'minor', tonic: 'B', tonicSemi: 11, relMajorSemi: 2,  type: 'sharp', count: 2, affected: ['F', 'C'], desc: '小調主音 La = B（關係大調 D 大調，Do = D）', detail: '調號：2 個升記號（F♯, C♯），小調主音為 B（唱作 La）。' },
+            'D_minor':  { name: 'd 小調',  mode: 'minor', tonic: 'D', tonicSemi: 2,  relMajorSemi: 5,  type: 'flat',  count: 1, affected: ['B'], desc: '小調主音 La = D（關係大調 F 大調，Do = F）', detail: '調號：1 個降記號（B♭），小調主音為 D（唱作 La）。' },
+            'G_minor':  { name: 'g 小調',  mode: 'minor', tonic: 'G', tonicSemi: 7,  relMajorSemi: 10, type: 'flat',  count: 2, affected: ['B', 'E'], desc: '小調主音 La = G（關係大調 B♭ 大調，Do = B♭）', detail: '調號：2 個降記號（B♭, E♭），小調主音為 G（唱作 La）。' },
+            'C_minor':  { name: 'c 小調',  mode: 'minor', tonic: 'C', tonicSemi: 0,  relMajorSemi: 3,  type: 'flat',  count: 3, affected: ['B', 'E', 'A'], desc: '小調主音 La = C（關係大調 E♭ 大調，Do = E♭）', detail: '調號：3 個降記號（B♭, E♭, A♭），小調主音為 C（唱作 La）。' }
+        };
+
+        /**
+         * ============================================================================
+         * 2. 五線譜座標與幾何配置 (Grand Staff Geometry)
+         * ============================================================================
+         * 我們使用「自然音級步數 (Diatonic Step)」來統一定位音高：
+         * step = octave * 7 + letterIndex (C=0, D=1, E=2, F=3, G=4, A=5, B=6)
+         * 例如：中央 C (C4) = 4 * 7 + 0 = 28。
+         * 高音譜表最底線 (E4) = 28 + 2 = 30；最頂線 (F5) = 38。
+         * 低音譜表最底線 (G2) = 2 * 7 + 4 = 18；最頂線 (A3) = 26。
+         */
+        const STAFF_CFG = {
+            lineSpacing: 14,          // 五線譜相鄰兩線的間距 (px)
+            stepHeight: 7,            // 相鄰音級（線到間）的高度 = lineSpacing / 2
+            trebleTopY: 85,           // 高音譜表最頂線 (F5, step=38) 的 Y 座標
+            bassTopY: 255,            // 低音譜表最頂線 (A3, step=26) 的 Y 座標
+            svgHeight: 410,           // 畫布總高度
+            clefWidth: 75,            // 譜號保留寬度
+            keySigStepWidth: 16,      // 每個調號升降記號的寬度
+            noteSpacing: 84,          // 每個音符之間的水平間距
+            minNotesCapacity: 10      // 預設畫布至少容納的音符空間
+        };
+
+        // 調號在五線譜上的標準繪製位置 (以 step 表示)
+        const KEY_SIG_POSITIONS = {
+            sharp: {
+                treble: [38, 35, 39, 36], // F5, C5, G5, D5
+                bass:   [24, 21, 25, 22]  // F3, C3, G3, D3
+            },
+            flat: {
+                treble: [34, 37, 33, 36], // B4, E5, A4, D5
+                bass:   [20, 23, 19, 22]  // B2, E3, A2, D3
+            }
+        };
+
+        // 應用程式狀態
+        let state = {
+            currentKey: 'C_major',
+            toolMode: 'add',          // 'add' | 'erase'
+            selectedDuration: 1,      // 4, 2, 1, 0.5
+            selectedAccidental: 'none', // 'none' | 'sharp' | 'flat' | 'natural'
+            notes: [],                // 存放物件: { id, clef: 'treble'|'bass', step: number, duration: number, accidental: string }
+            hoverPreview: null,       // { clef, step, x }
+            isPlaying: false,
+            playingIndex: -1,
+            bpm: 90,
+            playbackTimers: []
+        };
+
+        /**
+         * ============================================================================
+         * 3. 音高計算與唱名轉換核心函式 (Pitch & Solfege Engine)
+         * ============================================================================
+         */
+        function stepToLetterAndOctave(step) {
+            const octave = Math.floor(step / 7);
+            const letterIdx = ((step % 7) + 7) % 7;
+            const letter = LETTER_NAMES[letterIdx];
+            return { letter, octave, letterIdx };
+        }
+
+        // 計算某個音符在當前調性與臨時記號下的實際 MIDI 音高、音名、首調唱名
+        function analyzeNote(step, accidental = 'none', keyId = state.currentKey) {
+            const keyInfo = KEY_SIGNATURES[keyId];
+            const { letter, octave } = stepToLetterAndOctave(step);
+            
+            // 1. 決定實際升降偏移量 (-1: 降, 0: 還原, +1: 升)
+            let semitoneOffset = 0;
+            let effectiveAcc = 'none'; // 實際生效的記號狀態
+
+            if (accidental === 'sharp') {
+                semitoneOffset = 1;
+                effectiveAcc = 'sharp';
+            } else if (accidental === 'flat') {
+                semitoneOffset = -1;
+                effectiveAcc = 'flat';
+            } else if (accidental === 'natural') {
+                semitoneOffset = 0;
+                effectiveAcc = 'natural';
+            } else {
+                // 依照調號
+                if (keyInfo.affected.includes(letter)) {
+                    semitoneOffset = keyInfo.type === 'sharp' ? 1 : -1;
+                    effectiveAcc = keyInfo.type;
+                }
+            }
+
+            // 2. 計算標準 MIDI 編號 (C4 = 60)
+            const midi = (octave + 1) * 12 + NATURAL_SEMITONES[letter] + semitoneOffset;
+            const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+            // 3. 組合固定調音名 (如 C4, F♯4, B♭3)
+            let accSymbol = '';
+            if (semitoneOffset === 1) accSymbol = '♯';
+            else if (semitoneOffset === -1) accSymbol = '♭';
+            const fixedName = `${letter}${accSymbol}${octave}`;
+
+            // 4. 計算首調唱名 (Movable Do)
+            // 大調以 tonicSemi 為 Do (0)；自然小調以關係大調 relMajorSemi 為 Do (0)，使小調主音為 La
+            const doBaseSemi = keyInfo.mode === 'major' ? keyInfo.tonicSemi : keyInfo.relMajorSemi;
+            const relSemi = ((midi - doBaseSemi) % 12 + 12) % 12;
+
+            // 判斷在自然音階中的級數，以呈現最道地的視唱唱名
+            let movableName = '';
+            const majorScaleSemis = [0, 2, 4, 5, 7, 9, 11];
+            const diatonicIndex = majorScaleSemis.indexOf(relSemi);
+
+            if (diatonicIndex !== -1) {
+                movableName = DIATONIC_SOLFEGE[diatonicIndex];
+            } else {
+                // 半音階變化音，依據升記號或降記號習慣顯示
+                const pair = MOVABLE_DO_MAP[relSemi];
+                if (semitoneOffset === -1 || keyInfo.type === 'flat') {
+                    movableName = pair[1]; // Ra, Me, Se, Le, Te
+                } else {
+                    movableName = pair[0]; // Di, Ri, Fi, Si, Li
+                }
+            }
+
+            return {
+                midi,
+                freq,
+                fixedName,
+                movableName,
+                semitoneOffset,
+                letter,
+                octave
+            };
+        }
+
+        // 將 step 轉換為 SVG 上的 Y 座標
+        function stepToY(clef, step) {
+            if (clef === 'treble') {
+                // 高音譜頂線 F5 (step 38) 對應 trebleTopY
+                return STAFF_CFG.trebleTopY + (38 - step) * STAFF_CFG.stepHeight;
+            } else {
+                // 低音譜頂線 A3 (step 26) 對應 bassTopY
+                return STAFF_CFG.bassTopY + (26 - step) * STAFF_CFG.stepHeight;
+            }
+        }
+
+        // 將滑鼠 Y 座標轉換為最接近的譜表與 step
+        function yToClefAndStep(y) {
+            // 高音譜與低音譜的分界線取兩譜表正中間
+            const midY = (STAFF_CFG.trebleTopY + 4 * STAFF_CFG.lineSpacing + STAFF_CFG.bassTopY) / 2;
+            if (y < midY) {
+                const rawStep = 38 - Math.round((y - STAFF_CFG.trebleTopY) / STAFF_CFG.stepHeight);
+                // 限制高音譜合理範圍：F3 (step 24) 到 A6 (step 47)
+                const step = Math.max(24, Math.min(47, rawStep));
+                return { clef: 'treble', step };
+            } else {
+                const rawStep = 26 - Math.round((y - STAFF_CFG.bassTopY) / STAFF_CFG.stepHeight);
+                // 限制低音譜合理範圍：C1 (step 7) 到 G4 (step 32)
+                const step = Math.max(7, Math.min(32, rawStep));
+                return { clef: 'bass', step };
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 4. Web Audio API 鋼琴與柔和人聲合成器 (Audio Synthesizer)
+         * ============================================================================
+         */
+        let audioCtx = null;
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(freq, durationSec = 0.6, startTimeOffset = 0) {
+            try {
+                initAudioContext();
+                const now = audioCtx.currentTime + startTimeOffset;
+                const timbre = document.getElementById('timbreSelect').value;
+
+                const masterGain = audioCtx.createGain();
+                masterGain.connect(audioCtx.destination);
+
+                if (timbre === 'piano') {
+                    // 溫暖電鋼琴音色：基頻三角波 + 二次/三次泛音正弦波 + 低通濾波器
+                    const osc1 = audioCtx.createOscillator();
+                    const osc2 = audioCtx.createOscillator();
+                    const osc3 = audioCtx.createOscillator();
+
+                    osc1.type = 'triangle';
+                    osc1.frequency.setValueAtTime(freq, now);
+
+                    osc2.type = 'sine';
+                    osc2.frequency.setValueAtTime(freq * 2, now);
+
+                    osc3.type = 'sine';
+                    osc3.frequency.setValueAtTime(freq * 3, now);
+
+                    const g1 = audioCtx.createGain();
+                    const g2 = audioCtx.createGain();
+                    const g3 = audioCtx.createGain();
+                    g1.gain.value = 0.55;
+                    g2.gain.value = 0.22;
+                    g3.gain.value = 0.08;
+
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(Math.min(freq * 6, 4000), now);
+                    filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 1.5, 400), now + durationSec);
+
+                    osc1.connect(g1); osc2.connect(g2); osc3.connect(g3);
+                    g1.connect(filter); g2.connect(filter); g3.connect(filter);
+                    filter.connect(masterGain);
+
+                    // ADSR 音量包絡
+                    masterGain.gain.setValueAtTime(0.001, now);
+                    masterGain.gain.linearRampToValueAtTime(0.45, now + 0.02);
+                    masterGain.gain.exponentialRampToValueAtTime(0.15, now + durationSec * 0.6);
+                    masterGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec + 0.15);
+
+                    osc1.start(now); osc2.start(now); osc3.start(now);
+                    osc1.stop(now + durationSec + 0.2);
+                    osc2.stop(now + durationSec + 0.2);
+                    osc3.stop(now + durationSec + 0.2);
+
+                } else {
+                    // 人聲母音共振峰合成器 (Ah 或 Oo)
+                    const osc = audioCtx.createOscillator();
+                    const vibrato = audioCtx.createOscillator();
+                    const vibratoGain = audioCtx.createGain();
+
+                    // 使用鋸齒波產生豐富聲帶諧波
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    // 加入自然的人聲抖音 (Vibrato)
+                    vibrato.type = 'sine';
+                    vibrato.frequency.setValueAtTime(5.2, now);
+                    vibratoGain.gain.setValueAtTime(0, now);
+                    vibratoGain.gain.linearRampToValueAtTime(freq * 0.008, now + 0.25);
+                    vibrato.connect(vibratoGain);
+                    vibratoGain.connect(osc.frequency);
+
+                    // 雙共振峰濾波器模擬口腔共鳴
+                    const f1 = audioCtx.createBiquadFilter();
+                    const f2 = audioCtx.createBiquadFilter();
+                    f1.type = 'bandpass';
+                    f2.type = 'bandpass';
+                    f1.Q.value = 5.5;
+                    f2.Q.value = 7.0;
+
+                    if (timbre === 'vocal_ah') {
+                        // 母音「啊 Ah」共振峰：F1 ~ 730Hz, F2 ~ 1090Hz
+                        f1.frequency.setValueAtTime(730, now);
+                        f2.frequency.setValueAtTime(1090, now);
+                    } else {
+                        // 母音「嗚 Oo」共振峰：F1 ~ 320Hz, F2 ~ 800Hz
+                        f1.frequency.setValueAtTime(320, now);
+                        f2.frequency.setValueAtTime(800, now);
+                    }
+
+                    const f1Gain = audioCtx.createGain();
+                    const f2Gain = audioCtx.createGain();
+                    f1Gain.gain.value = 1.4;
+                    f2Gain.gain.value = 0.8;
+
+                    osc.connect(f1); osc.connect(f2);
+                    f1.connect(f1Gain); f2.connect(f2Gain);
+                    f1Gain.connect(masterGain); f2Gain.connect(masterGain);
+
+                    // 柔和起音與釋放
+                    masterGain.gain.setValueAtTime(0.001, now);
+                    masterGain.gain.linearRampToValueAtTime(0.45, now + 0.08);
+                    masterGain.gain.setValueAtTime(0.42, now + Math.max(0.1, durationSec - 0.08));
+                    masterGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec + 0.12);
+
+                    osc.start(now); vibrato.start(now);
+                    osc.stop(now + durationSec + 0.15);
+                    vibrato.stop(now + durationSec + 0.15);
+                }
+            } catch (err) {
+                console.warn('音訊播放初始化異常:', err);
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. 定調輔助與樂譜播放功能 (Scale, Triad, Sequence Playback)
+         * ============================================================================
+         */
+        function playTonicTriad() {
+            stopPlayback();
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+            // 計算主音在 C4 附近的基準 MIDI (C4=60 ~ B4=71)
+            const rootMidi = 60 + keyInfo.tonicSemi;
+            const thirdMidi = rootMidi + (keyInfo.mode === 'major' ? 4 : 3);
+            const fifthMidi = rootMidi + 7;
+
+            const toFreq = m => 440 * Math.pow(2, (m - 69) / 12);
+
+            // 分解和弦 + 柱式和弦
+            playTone(toFreq(rootMidi), 0.55, 0);
+            playTone(toFreq(thirdMidi), 0.55, 0.35);
+            playTone(toFreq(fifthMidi), 0.55, 0.70);
+            // 同時和鳴
+            playTone(toFreq(rootMidi), 1.1, 1.15);
+            playTone(toFreq(thirdMidi), 1.1, 1.15);
+            playTone(toFreq(fifthMidi), 1.1, 1.15);
+
+            showToast(`已播放 ${keyInfo.name} 主和弦定調音`);
+        }
+
+        function playCurrentScale() {
+            stopPlayback();
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+            const rootMidi = 60 + keyInfo.tonicSemi;
+            const intervals = keyInfo.mode === 'major'
+                ? [0, 2, 4, 5, 7, 9, 11, 12]
+                : [0, 2, 3, 5, 7, 8, 10, 12];
+
+            intervals.forEach((semi, idx) => {
+                const freq = 440 * Math.pow(2, (rootMidi + semi - 69) / 12);
+                playTone(freq, 0.42, idx * 0.38);
+            });
+
+            showToast(`正在播放 ${keyInfo.name} 上行音階`);
+        }
+
+        function togglePlayAll() {
+            if (state.isPlaying) {
+                stopPlayback();
+                return;
+            }
+            if (state.notes.length === 0) {
+                showToast('樂譜目前是空的，請先點擊五線譜放置音符或載入範例！');
+                return;
+            }
+
+            state.isPlaying = true;
+            updatePlayButtonUI();
+
+            const beatSec = 60 / state.bpm;
+            let cumulativeTimeMs = 0;
+
+            state.notes.forEach((note, index) => {
+                const info = analyzeNote(note.step, note.accidental);
+                const noteDurationSec = note.duration * beatSec;
+
+                const timer = setTimeout(() => {
+                    state.playingIndex = index;
+                    playTone(info.freq, noteDurationSec * 0.92, 0);
+                    renderStaff();
+                    scrollToNoteIfNeeded(index);
+                }, cumulativeTimeMs);
+
+                state.playbackTimers.push(timer);
+                cumulativeTimeMs += noteDurationSec * 1000;
+            });
+
+            // 播放結束重置狀態
+            const endTimer = setTimeout(() => {
+                stopPlayback();
+            }, cumulativeTimeMs + 150);
+            state.playbackTimers.push(endTimer);
+        }
+
+        function stopPlayback() {
+            state.playbackTimers.forEach(t => clearTimeout(t));
+            state.playbackTimers = [];
+            state.isPlaying = false;
+            state.playingIndex = -1;
+            updatePlayButtonUI();
+            renderStaff();
+        }
+
+        function updatePlayButtonUI() {
+            const btn = document.getElementById('playAllBtn');
+            const text = document.getElementById('playBtnText');
+            const icon = document.getElementById('playIcon');
+            if (state.isPlaying) {
+                btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                btn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+                text.textContent = '停止播放';
+                icon.innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />';
+            } else {
+                btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                btn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+                text.textContent = '依序播放全部音符';
+                icon.innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />';
+            }
+        }
+
+        function scrollToNoteIfNeeded(index) {
+            const container = document.getElementById('staffScrollContainer');
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+            const startX = STAFF_CFG.clefWidth + keyInfo.count * STAFF_CFG.keySigStepWidth + 45;
+            const noteX = startX + index * STAFF_CFG.noteSpacing;
+            if (noteX > container.scrollLeft + container.clientWidth - 80 || noteX < container.scrollLeft) {
+                container.scrollTo({ left: Math.max(0, noteX - 150), behavior: 'smooth' });
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 6. SVG 高解析度五線譜與音符繪製引擎 (SVG Grand Staff Renderer)
+         * ============================================================================
+         */
+        function getNotesStartX() {
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+            return STAFF_CFG.clefWidth + Math.max(1, keyInfo.count) * STAFF_CFG.keySigStepWidth + 38;
+        }
+
+        function renderStaff() {
+            const svg = document.getElementById('grandStaffSvg');
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+            const labelMode = document.getElementById('labelModeSelect').value;
+
+            const startX = getNotesStartX();
+            const totalSlots = Math.max(STAFF_CFG.minNotesCapacity, state.notes.length + 3);
+            const svgWidth = Math.max(880, startX + totalSlots * STAFF_CFG.noteSpacing + 60);
+
+            svg.setAttribute('width', svgWidth);
+            svg.setAttribute('height', STAFF_CFG.svgHeight);
+            svg.setAttribute('viewBox', `0 0 ${svgWidth} ${STAFF_CFG.svgHeight}`);
+
+            let html = '';
+
+            // 1. 繪製大譜表左側連接線與大括號 (Brace)
+            const trebleBottomY = STAFF_CFG.trebleTopY + 4 * STAFF_CFG.lineSpacing;
+            const bassBottomY = STAFF_CFG.bassTopY + 4 * STAFF_CFG.lineSpacing;
+            html += `<line x1="22" y1="${STAFF_CFG.trebleTopY}" x2="22" y2="${bassBottomY}" stroke="#334155" stroke-width="2.5" />`;
+            // 優雅的左側大括號曲線
+            const midGrandY = (STAFF_CFG.trebleTopY + bassBottomY) / 2;
+            html += `<path d="M 18 ${STAFF_CFG.trebleTopY} C 6 ${STAFF_CFG.trebleTopY + 25}, 16 ${midGrandY - 15}, 5 ${midGrandY} C 16 ${midGrandY + 15}, 6 ${bassBottomY - 25}, 18 ${bassBottomY}" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round"/>`;
+
+            // 2. 繪製高音譜表與低音譜表的五條平行線
+            for (let i = 0; i < 5; i++) {
+                const ty = STAFF_CFG.trebleTopY + i * STAFF_CFG.lineSpacing;
+                const by = STAFF_CFG.bassTopY + i * STAFF_CFG.lineSpacing;
+                html += `<line x1="22" y1="${ty}" x2="${svgWidth - 20}" y2="${ty}" stroke="#64748b" stroke-width="1.3" />`;
+                html += `<line x1="22" y1="${by}" x2="${svgWidth - 20}" y2="${by}" stroke="#64748b" stroke-width="1.3" />`;
+            }
+
+            // 譜表右側終止雙細線
+            html += `<line x1="${svgWidth - 25}" y1="${STAFF_CFG.trebleTopY}" x2="${svgWidth - 25}" y2="${trebleBottomY}" stroke="#64748b" stroke-width="1.3" />`;
+            html += `<line x1="${svgWidth - 20}" y1="${STAFF_CFG.trebleTopY}" x2="${svgWidth - 20}" y2="${trebleBottomY}" stroke="#334155" stroke-width="3" />`;
+            html += `<line x1="${svgWidth - 25}" y1="${STAFF_CFG.bassTopY}" x2="${svgWidth - 25}" y2="${bassBottomY}" stroke="#64748b" stroke-width="1.3" />`;
+            html += `<line x1="${svgWidth - 20}" y1="${STAFF_CFG.bassTopY}" x2="${svgWidth - 20}" y2="${bassBottomY}" stroke="#334155" stroke-width="3" />`;
+
+            // 譜表文字標籤 (極淡浮水印幫助初學者辨識)
+            html += `<text x="${svgWidth - 34}" y="${STAFF_CFG.trebleTopY - 10}" text-anchor="end" font-size="11" font-weight="600" fill="#94a3b8">高音譜表 (女聲 / 高音域)</text>`;
+            html += `<text x="${svgWidth - 34}" y="${STAFF_CFG.bassTopY - 10}" text-anchor="end" font-size="11" font-weight="600" fill="#94a3b8">低音譜表 (男聲 / 低音域)</text>`;
+
+            // 3. 繪製高音譜號 (𝄞) 與低音譜號 (𝄢)
+            // 使用標準 Unicode 音樂字元搭配精準定位
+            html += `<text x="28" y="${STAFF_CFG.trebleTopY + 46}" font-size="76" font-family="serif" fill="#1e293b">𝄞</text>`;
+            html += `<text x="30" y="${STAFF_CFG.bassTopY + 44}" font-size="60" font-family="serif" fill="#1e293b">𝄢</text>`;
+
+            // 4. 繪製調號 (Key Signature Sharps / Flats)
+            if (keyInfo.count > 0) {
+                const symbol = keyInfo.type === 'sharp' ? '♯' : '♭';
+                const trebleSteps = KEY_SIG_POSITIONS[keyInfo.type].treble;
+                const bassSteps = KEY_SIG_POSITIONS[keyInfo.type].bass;
+
+                for (let i = 0; i < keyInfo.count; i++) {
+                    const kx = STAFF_CFG.clefWidth + i * STAFF_CFG.keySigStepWidth;
+                    const ty = stepToY('treble', trebleSteps[i]);
+                    const by = stepToY('bass', bassSteps[i]);
+
+                    html += `<text x="${kx}" y="${ty + 7}" font-size="22" font-weight="bold" fill="#4f46e5">${symbol}</text>`;
+                    html += `<text x="${kx}" y="${by + 7}" font-size="22" font-weight="bold" fill="#4f46e5">${symbol}</text>`;
+                }
+            }
+
+            // 5. 繪製音符放置格線導引 (淡虛線提示每個音符插槽)
+            for (let i = 0; i < totalSlots; i++) {
+                const slotX = startX + i * STAFF_CFG.noteSpacing;
+                html += `<line x1="${slotX}" y1="${STAFF_CFG.trebleTopY - 14}" x2="${slotX}" y2="${trebleBottomY + 14}" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3,3" />`;
+                html += `<line x1="${slotX}" y1="${STAFF_CFG.bassTopY - 14}" x2="${slotX}" y2="${bassBottomY + 14}" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3,3" />`;
+            }
+
+            // 6. 繪製已放置的音符與唱名標注
+            state.notes.forEach((note, idx) => {
+                const x = startX + idx * STAFF_CFG.noteSpacing;
+                const y = stepToY(note.clef, note.step);
+                const info = analyzeNote(note.step, note.accidental);
+                const isHighlighted = (state.playingIndex === idx);
+
+                const primaryColor = isHighlighted ? '#e11d48' : '#0f172a';
+                const badgeBg = isHighlighted ? '#ffe4e6' : '#eef2ff';
+                const badgeText = isHighlighted ? '#be123c' : '#4338ca';
+
+                html += `<g class="note-group" data-note-index="${idx}">`;
+
+                // 播放高亮光暈
+                if (isHighlighted) {
+                    html += `<circle cx="${x}" cy="${y}" r="18" fill="#fecdd3" opacity="0.7" />`;
+                }
+
+                // 繪製上加線與下加線 (Ledger Lines)
+                html += renderLedgerLines(note.clef, note.step, x, primaryColor);
+
+                // 繪製臨時升降記號 (若音符本身有設定)
+                if (note.accidental !== 'none') {
+                    const accChar = note.accidental === 'sharp' ? '♯' : (note.accidental === 'flat' ? '♭' : '♮');
+                    html += `<text x="${x - 22}" y="${y + 6}" font-size="20" font-weight="bold" fill="${primaryColor}">${accChar}</text>`;
+                }
+
+                // 繪製符頭 (Notehead)
+                const isHollow = (note.duration === 4 || note.duration === 2);
+                html += `<ellipse cx="${x}" cy="${y}" rx="8.5" ry="6" transform="rotate(-18 ${x} ${y})" fill="${isHollow ? '#ffffff' : primaryColor}" stroke="${primaryColor}" stroke-width="2.2" />`;
+
+                // 繪製符幹 (Stem) 與符尾 (Flag) - 全音符無符幹
+                if (note.duration < 4) {
+                    // 高音譜第三線 (B4, step=34) 以上符幹朝下，以下朝上；低音譜第三線 (D3, step=22) 以上朝下
+                    const middleStep = note.clef === 'treble' ? 34 : 22;
+                    const stemUp = note.step < middleStep;
+                    const stemX = stemUp ? x + 7.5 : x - 7.5;
+                    const stemY2 = stemUp ? y - 36 : y + 36;
+
+                    html += `<line x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemY2}" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" />`;
+
+                    // 八分音符符尾
+                    if (note.duration === 0.5) {
+                        if (stemUp) {
+                            html += `<path d="M ${stemX} ${stemY2} Q ${stemX + 12} ${stemY2 + 10}, ${stemX + 8} ${stemY2 + 22}" fill="none" stroke="${primaryColor}" stroke-width="2.2" stroke-linecap="round" />`;
+                        } else {
+                            html += `<path d="M ${stemX} ${stemY2} Q ${stemX + 12} ${stemY2 - 10}, ${stemX + 8} ${stemY2 - 22}" fill="none" stroke="${primaryColor}" stroke-width="2.2" stroke-linecap="round" />`;
+                        }
+                    }
+                }
+
+                // 繪製唱名與音名標注 (統一顯示在該譜表下方，整齊易讀不重疊)
+                if (labelMode !== 'none') {
+                    const labelBaseY = note.clef === 'treble' ? trebleBottomY + 26 : bassBottomY + 26;
+
+                    if (labelMode === 'both') {
+                        // 首調唱名膠囊徽章
+                        html += `<rect x="${x - 22}" y="${labelBaseY - 12}" width="44" height="18" rx="6" fill="${badgeBg}" />`;
+                        html += `<text x="${x}" y="${labelBaseY + 1}" text-anchor="middle" font-size="12" font-weight="700" fill="${badgeText}">${info.movableName}</text>`;
+                        // 下方固定調音名
+                        html += `<text x="${x}" y="${labelBaseY + 19}" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">${info.fixedName}</text>`;
+                    } else if (labelMode === 'movable') {
+                        html += `<rect x="${x - 22}" y="${labelBaseY - 12}" width="44" height="19" rx="6" fill="${badgeBg}" />`;
+                        html += `<text x="${x}" y="${labelBaseY + 2}" text-anchor="middle" font-size="12" font-weight="700" fill="${badgeText}">${info.movableName}</text>`;
+                    } else if (labelMode === 'fixed') {
+                        html += `<rect x="${x - 22}" y="${labelBaseY - 12}" width="44" height="19" rx="6" fill="#f1f5f9" />`;
+                        html += `<text x="${x}" y="${labelBaseY + 2}" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">${info.fixedName}</text>`;
+                    }
+                }
+
+                // 透明放大點擊感應區，方便平板觸控點擊已存在的音符
+                html += `<circle cx="${x}" cy="${y}" r="18" fill="transparent" />`;
+                html += `</g>`;
+            });
+
+            // 7. 繪製滑鼠懸停半透明預覽音符 (Hover Ghost Note)
+            if (state.hoverPreview && state.toolMode === 'add' && !state.isPlaying) {
+                const { clef, step } = state.hoverPreview;
+                // 預覽顯示在下一個將被放置的音符槽位
+                const previewX = startX + state.notes.length * STAFF_CFG.noteSpacing;
+                const previewY = stepToY(clef, step);
+                const info = analyzeNote(step, state.selectedAccidental);
+
+                html += `<g opacity="0.65" pointer-events="none">`;
+                html += renderLedgerLines(clef, step, previewX, '#6366f1');
+                if (state.selectedAccidental !== 'none') {
+                    const accChar = state.selectedAccidental === 'sharp' ? '♯' : (state.selectedAccidental === 'flat' ? '♭' : '♮');
+                    html += `<text x="${previewX - 22}" y="${previewY + 6}" font-size="20" font-weight="bold" fill="#6366f1">${accChar}</text>`;
+                }
+                html += `<ellipse cx="${previewX}" cy="${previewY}" rx="8.5" ry="6" transform="rotate(-18 ${previewX} ${previewY})" fill="#6366f1" />`;
+                
+                // 預覽浮動提示標籤
+                const tagY = previewY - 16;
+                html += `<rect x="${previewX - 38}" y="${tagY - 14}" width="76" height="18" rx="5" fill="#312e81" />`;
+                html += `<text x="${previewX}" y="${tagY - 1}" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">${info.movableName} · ${info.fixedName}</text>`;
+                html += `</g>`;
+            }
+
+            svg.innerHTML = html;
+        }
+
+        // 輔助繪製上加線與下加線
+        function renderLedgerLines(clef, step, x, color) {
+            let linesHtml = '';
+            if (clef === 'treble') {
+                // 高音譜五線範圍: E4 (step 30) ~ F5 (step 38)
+                if (step <= 28) {
+                    for (let s = 28; s >= step; s -= 2) {
+                        const ly = stepToY('treble', s);
+                        linesHtml += `<line x1="${x - 14}" y1="${ly}" x2="${x + 14}" y2="${ly}" stroke="${color}" stroke-width="1.5" />`;
+                    }
+                } else if (step >= 40) {
+                    for (let s = 40; s <= step; s += 2) {
+                        const ly = stepToY('treble', s);
+                        linesHtml += `<line x1="${x - 14}" y1="${ly}" x2="${x + 14}" y2="${ly}" stroke="${color}" stroke-width="1.5" />`;
+                    }
+                }
+            } else {
+                // 低音譜五線範圍: G2 (step 18) ~ A3 (step 26)
+                if (step <= 16) {
+                    for (let s = 16; s >= step; s -= 2) {
+                        const ly = stepToY('bass', s);
+                        linesHtml += `<line x1="${x - 14}" y1="${ly}" x2="${x + 14}" y2="${ly}" stroke="${color}" stroke-width="1.5" />`;
+                    }
+                } else if (step >= 28) {
+                    for (let s = 28; s <= step; s += 2) {
+                        const ly = stepToY('bass', s);
+                        linesHtml += `<line x1="${x - 14}" y1="${ly}" x2="${x + 14}" y2="${ly}" stroke="${color}" stroke-width="1.5" />`;
+                    }
+                }
+            }
+            return linesHtml;
+        }
+
+        /**
+         * ============================================================================
+         * 7. 互動事件處理 (Mouse & Touch Events on SVG)
+         * ============================================================================
+         */
+        function setupSvgInteractions() {
+            const svg = document.getElementById('grandStaffSvg');
+
+            // 取得相對於 SVG 的精準座標
+            function getSvgPoint(clientX, clientY) {
+                const rect = svg.getBoundingClientRect();
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            svg.addEventListener('mousemove', (e) => {
+                const pt = getSvgPoint(e.clientX, e.clientY);
+                const { clef, step } = yToClefAndStep(pt.y);
+                const info = analyzeNote(step, state.selectedAccidental);
+
+                const clefLabel = clef === 'treble' ? '高音譜' : '低音譜';
+                document.getElementById('hoverPitchIndicator').textContent =
+                    `${clefLabel}｜首調: ${info.movableName} ｜ 音名: ${info.fixedName}`;
+
+                if (!state.hoverPreview || state.hoverPreview.clef !== clef || state.hoverPreview.step !== step) {
+                    state.hoverPreview = { clef, step };
+                    renderStaff();
+                }
+            });
+
+            svg.addEventListener('mouseleave', () => {
+                state.hoverPreview = null;
+                document.getElementById('hoverPitchIndicator').textContent = '游標位置：請移動至五線譜上';
+                renderStaff();
+            });
+
+            svg.addEventListener('click', (e) => {
+                if (state.isPlaying) {
+                    stopPlayback();
+                }
+
+                // 檢查是否點擊到已存在的音符群組
+                const noteGroup = e.target.closest('.note-group');
+                if (noteGroup) {
+                    const idx = parseInt(noteGroup.getAttribute('data-note-index'), 10);
+                    const targetNote = state.notes[idx];
+                    if (state.toolMode === 'erase') {
+                        state.notes.splice(idx, 1);
+                        renderStaff();
+                        showToast('已刪除該音符');
+                    } else {
+                        // 在新增模式下點擊既有音符：單獨試聽該音高並閃爍提示
+                        const info = analyzeNote(targetNote.step, targetNote.accidental);
+                        playTone(info.freq, 0.55, 0);
+                        state.playingIndex = idx;
+                        renderStaff();
+                        setTimeout(() => {
+                            if (!state.isPlaying) {
+                                state.playingIndex = -1;
+                                renderStaff();
+                            }
+                        }, 350);
+                    }
+                    return;
+                }
+
+                // 若為橡皮擦模式且未點到音符，則不新增
+                if (state.toolMode === 'erase') {
+                    showToast('橡皮擦模式：請直接點擊想刪除的音符');
+                    return;
+                }
+
+                // 新增音符至樂譜尾端
+                const pt = getSvgPoint(e.clientX, e.clientY);
+                const { clef, step } = yToClefAndStep(pt.y);
+
+                const newNote = {
+                    id: Date.now() + Math.random(),
+                    clef,
+                    step,
+                    duration: state.selectedDuration,
+                    accidental: state.selectedAccidental
+                };
+
+                state.notes.push(newNote);
+                const info = analyzeNote(step, state.selectedAccidental);
+                playTone(info.freq, 0.5, 0);
+                renderStaff();
+
+                // 自動捲動到最新放置的音符處
+                scrollToNoteIfNeeded(state.notes.length - 1);
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 8. UI 控制項與範例旋律載入 (UI Controls & Presets)
+         * ============================================================================
+         */
+        function handleKeyChange() {
+            stopPlayback();
+            state.currentKey = document.getElementById('keySelect').value;
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+
+            document.getElementById('keyInfoText').textContent = keyInfo.desc;
+            document.getElementById('keySigDetail').textContent = keyInfo.detail;
+
+            renderStaff();
+            showToast(`已切換至 ${keyInfo.name}`);
+        }
+
+        function setToolMode(mode) {
+            state.toolMode = mode;
+            const addBtn = document.getElementById('modeAddBtn');
+            const eraseBtn = document.getElementById('modeEraseBtn');
+
+            if (mode === 'add') {
+                addBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs transition flex items-center gap-1';
+                eraseBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1';
+            } else {
+                eraseBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white shadow-xs transition flex items-center gap-1';
+                addBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition flex items-center gap-1';
+            }
+            renderStaff();
+        }
+
+        function setDuration(dur) {
+            state.selectedDuration = dur;
+            document.querySelectorAll('.dur-btn').forEach(btn => {
+                if (parseFloat(btn.getAttribute('data-dur')) === dur) {
+                    btn.className = 'dur-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-indigo-600 shadow-xs transition';
+                } else {
+                    btn.className = 'dur-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition';
+                }
+            });
+        }
+
+        function setAccidental(acc) {
+            state.selectedAccidental = acc;
+            document.querySelectorAll('.acc-btn').forEach(btn => {
+                if (btn.getAttribute('data-acc') === acc) {
+                    btn.className = 'acc-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-indigo-600 shadow-xs transition';
+                } else {
+                    btn.className = 'acc-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white transition';
+                }
+            });
+            renderStaff();
+        }
+
+        function updateBpm(val) {
+            state.bpm = parseInt(val, 10);
+            document.getElementById('bpmDisplay').textContent = `${state.bpm} BPM`;
+        }
+
+        function clearNotes() {
+            stopPlayback();
+            state.notes = [];
+            renderStaff();
+            showToast('已清空所有音符');
+        }
+
+        // 載入教學範例旋律
+        function loadPreset(type) {
+            stopPlayback();
+            const keyInfo = KEY_SIGNATURES[state.currentKey];
+
+            if (type === 'scale') {
+                // 依據當前所選調性，自動在高音譜上生成完整八度音階練習
+                const tonicLetterIdx = LETTER_NAMES.indexOf(keyInfo.tonic);
+                // 尋找高音譜最適合的起始八度 (C4=28 到 B4=34 之間)
+                const baseStep = 4 * 7 + tonicLetterIdx;
+                state.notes = [];
+                for (let i = 0; i < 8; i++) {
+                    state.notes.push({
+                        id: i + 1,
+                        clef: 'treble',
+                        step: baseStep + i,
+                        duration: i === 7 ? 2 : 1,
+                        accidental: 'none'
+                    });
+                }
+                renderStaff();
+                showToast(`已載入「${keyInfo.name} 視唱音階練習」`);
+            } else if (type === 'twinkle') {
+                // 《小星星》首調旋律 (Do Do Sol Sol La La Sol - Fa Fa Mi Mi Re Re Do)
+                // 自動配合當前調性主音平移，讓使用者體會「首調唱名在任何調都一樣」的魅力！
+                const tonicLetterIdx = LETTER_NAMES.indexOf(keyInfo.tonic);
+                const baseStep = (keyInfo.mode === 'major')
+                    ? (4 * 7 + tonicLetterIdx)
+                    : (4 * 7 + LETTER_NAMES.indexOf(keyInfo.tonic)); // 若為小調則切換至 C 大調示範小星星
+                
+                if (keyInfo.mode === 'minor') {
+                    document.getElementById('keySelect').value = 'C_major';
+                    handleKeyChange();
+                }
+
+                const startStep = 4 * 7 + LETTER_NAMES.indexOf(KEY_SIGNATURES[state.currentKey].tonic);
+                const melodyOffsets = [
+                    { off: 0, dur: 1 }, { off: 0, dur: 1 }, { off: 4, dur: 1 }, { off: 4, dur: 1 },
+                    { off: 5, dur: 1 }, { off: 5, dur: 1 }, { off: 4, dur: 2 },
+                    { off: 3, dur: 1 }, { off: 3, dur: 1 }, { off: 2, dur: 1 }, { off: 2, dur: 1 },
+                    { off: 1, dur: 1 }, { off: 1, dur: 1 }, { off: 0, dur: 2 }
+                ];
+
+                state.notes = melodyOffsets.map((m, idx) => ({
+                    id: idx + 1,
+                    clef: 'treble',
+                    step: startStep + m.off,
+                    duration: m.dur,
+                    accidental: 'none'
+                }));
+                renderStaff();
+                showToast(`已載入《小星星》（${KEY_SIGNATURES[state.currentKey].name}）`);
+            } else if (type === 'ode') {
+                // 《歡樂頌》示範高低音譜混合視唱
+                const keyInfoNow = KEY_SIGNATURES[state.currentKey];
+                if (keyInfoNow.mode === 'minor') {
+                    document.getElementById('keySelect').value = 'C_major';
+                    handleKeyChange();
+                }
+                const startStep = 4 * 7 + LETTER_NAMES.indexOf(KEY_SIGNATURES[state.currentKey].tonic);
+                const melodyOffsets = [
+                    { off: 2, dur: 1 }, { off: 2, dur: 1 }, { off: 3, dur: 1 }, { off: 4, dur: 1 },
+                    { off: 4, dur: 1 }, { off: 3, dur: 1 }, { off: 2, dur: 1 }, { off: 1, dur: 1 },
+                    { off: 0, dur: 1 }, { off: 0, dur: 1 }, { off: 1, dur: 1 }, { off: 2, dur: 1 },
+                    { off: 2, dur: 1.5 }, { off: 1, dur: 0.5 }, { off: 1, dur: 2 }
+                ];
+
+                state.notes = melodyOffsets.map((m, idx) => ({
+                    id: idx + 1,
+                    clef: 'treble',
+                    step: startStep + m.off,
+                    duration: m.dur,
+                    accidental: 'none'
+                }));
+                renderStaff();
+                showToast(`已載入《歡樂頌》（${KEY_SIGNATURES[state.currentKey].name}）`);
+            }
+            document.getElementById('staffScrollContainer').scrollTo({ left: 0, behavior: 'smooth' });
+        }
+
+        // 輕量級浮動訊息通知
+        let toastTimeout = null;
+        function showToast(msg) {
+            const banner = document.getElementById('toastBanner');
+            const textEl = document.getElementById('toastMessage');
+            textEl.textContent = msg;
+            banner.classList.remove('hidden');
+            banner.style.opacity = '1';
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                banner.style.opacity = '0';
+                setTimeout(() => banner.classList.add('hidden'), 300);
+            }, 2600);
+        }
+
+        // 初始化應用程式
+        window.onload = function() {
+            setupSvgInteractions();
+            // 預設載入 C 大調音階，讓初學者一打開就能直接點擊播放體驗
+            loadPreset('scale');
+        };
+    </script>
+</body>
+</html>

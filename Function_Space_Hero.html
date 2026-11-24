@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>函數太空小英雄 Function Space Hero</title>
+  <!-- 載入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 載入 Google Fonts 繁體中文圓體/黑體與英數字體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <!-- 載入 Desmos Graphing Calculator API v1.12 -->
+  <script src="https://www.desmos.com/api/v1.12/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6" onerror="window.desmosLoadFailed = true;"></script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', 'Fredoka', sans-serif;
+      background-color: #0f172a;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    /* 星空背景微光 */
+    .space-bg {
+      background: radial-gradient(ellipse at top, #1e293b 0%, #0f172a 75%, #090d16 100%);
+    }
+
+    /* 自訂童趣觸控滑桿樣式 */
+    input[type="range"].space-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      outline: none;
+      touch-action: pan-x;
+      transition: background 0.15s;
+    }
+
+    input[type="range"].space-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--thumb-color, #4f46e5);
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+
+    input[type="range"].space-slider::-webkit-slider-thumb:active {
+      transform: scale(1.18);
+    }
+
+    input[type="range"].space-slider::-moz-range-thumb {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--thumb-color, #4f46e5);
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+    }
+
+    /* 發射按鈕脈動光暈 */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
+      50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+    }
+    .btn-launch {
+      animation: pulseGlow 2s infinite;
+    }
+
+    /* 彩帶畫布 */
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      pointer-events: none;
+      z-index: 60;
+    }
+  </style>
+</head>
+<body class="h-[100dvh] w-screen overflow-hidden flex flex-col md:flex-row text-slate-800 space-bg">
+  <!-- 過關彩帶特效畫布 -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- =====================================================================
+       左側 / 上半部：全幅 Desmos 座標太空畫布區 (手機佔 52% 高度，桌面佔 62% 寬度)
+       ===================================================================== -->
+  <section class="relative w-full h-[52dvh] md:h-[100dvh] md:w-[62%] bg-white overflow-hidden shrink-0 border-b-2 md:border-b-0 md:border-r-2 border-indigo-200 shadow-md">
+    <!-- Desmos 繪圖器容器 / 備援畫布容器 -->
+    <div id="calculator" class="w-full h-full absolute inset-0"></div>
+    <canvas id="fallback-canvas" class="hidden w-full h-full absolute inset-0 bg-white"></canvas>
+
+    <!-- 頂部浮動 HUD 資訊膠囊（不遮擋中心座標軸，眼睛不用離開畫面即可看公式與星星數） -->
+    <div class="absolute top-2.5 left-2.5 right-2.5 z-20 flex flex-wrap items-center justify-between gap-1.5 pointer-events-none">
+      <!-- 左上：關卡徽章與即時命中星星計數 -->
+      <div class="flex items-center gap-1.5 pointer-events-auto">
+        <button
+          onclick="openLevelModal()"
+          class="bg-slate-900/85 backdrop-blur-md text-white border border-indigo-400/40 rounded-full px-3 py-1 text-xs font-black shadow-md flex items-center gap-1.5 active:scale-95 transition"
+          title="切換關卡"
+        >
+          <span class="text-amber-300">🚀</span>
+          <span id="hud-level-badge">第 1 關</span>
+          <span class="text-slate-400 text-[10px]">▼</span>
+        </button>
+
+        <!-- 即時瞄準星星狀態膠囊 -->
+        <div id="hud-star-pill" class="bg-slate-900/85 backdrop-blur-md text-amber-300 border border-amber-400/40 rounded-full px-2.5 py-1 text-xs font-black shadow-md flex items-center gap-1 transition-all">
+          <span>⭐</span>
+          <span id="hud-star-status">0 / 2</span>
+        </div>
+      </div>
+
+      <!-- 右上：即時彩色方程式膠囊 + 重設視野 + 音效按鈕 -->
+      <div class="flex items-center gap-1.5 pointer-events-auto">
+        <div class="bg-slate-900/90 backdrop-blur-md text-white border border-indigo-400/50 rounded-full px-3 py-1 text-xs sm:text-sm font-mono font-black shadow-md tracking-wide">
+          <span id="hud-equation-display">y = x - <span class="text-emerald-400">2</span></span>
+        </div>
+
+        <button
+          onclick="resetViewBounds()"
+          title="重設座標視野"
+          class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 hover:bg-white text-indigo-700 border border-indigo-200 shadow-md flex items-center justify-center text-xs font-bold active:scale-90 transition"
+        >
+          🎯
+        </button>
+
+        <button
+          id="mute-btn"
+          onclick="toggleMute()"
+          title="切換音效"
+          class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900/85 text-white border border-slate-600 shadow-md flex items-center justify-center text-xs active:scale-90 transition"
+        >
+          🔊
+        </button>
+      </div>
+    </div>
+
+    <!-- Desmos 離線備援通知條 -->
+    <div id="desmos-fallback-banner" class="hidden absolute bottom-8 left-2.5 right-2.5 z-20 bg-rose-600/90 text-white px-3 py-1 rounded-xl text-[11px] font-bold text-center shadow">
+      ⚠️ 離線備援座標模式已啟動，所有關卡皆可正常遊玩！
+    </div>
+
+    <!-- 底部極簡圖例浮動列 -->
+    <div class="absolute bottom-1.5 left-2.5 right-2.5 z-10 flex items-center justify-between pointer-events-none text-[11px] font-bold text-slate-600">
+      <div class="bg-white/85 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-slate-200/80 flex items-center gap-2.5 shadow-sm">
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>目標星星</span>
+        <span id="legend-meteor" class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>避開隕石</span>
+      </div>
+      <span class="hidden sm:inline bg-white/85 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-slate-200/80 text-slate-500">
+        雙指或滾輪可縮放
+      </span>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       右側 / 下半部：緊湊拇指控制面板 (手機佔 48% 高度，零距離貼合圖表)
+       ===================================================================== -->
+  <section class="w-full h-[48dvh] md:h-[100dvh] md:w-[38%] bg-slate-50 flex flex-col justify-between p-2.5 sm:p-4 overflow-hidden">
+    
+    <!-- 1. 頂部任務標題與單行動態提示膠囊 -->
+    <div class="shrink-0">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <h1 id="level-title" class="text-sm sm:text-base font-black text-slate-800 truncate">
+          第 1 關：垂直電梯 (y = x + b)
+        </h1>
+        <span class="text-[11px] font-extrabold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full shrink-0">
+          總星數 ⭐ <span id="total-stars-count">0</span>/<span id="max-stars-count">13</span>
+        </span>
+      </div>
+
+      <!-- 單行白話文即時提示列（滑動參數時動態更新意義） -->
+      <div id="live-hint-banner" class="bg-indigo-600/10 border border-indigo-200 text-indigo-950 rounded-xl px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5 truncate">
+        <span class="shrink-0">💡</span>
+        <span id="live-hint-text" class="truncate">b 就像電梯，決定線要往上還是往下移動！</span>
+      </div>
+
+      <!-- 自由實驗室專用緊湊輸入列 (僅自由模式顯示) -->
+      <div id="free-lab-controls" class="hidden mt-1.5 flex items-center gap-1.5">
+        <input
+          id="custom-func-input"
+          type="text"
+          value="y = a * sin(b * x) + k"
+          placeholder="輸入函數如 y = sin(x)"
+          class="flex-1 px-2.5 py-1 rounded-xl border border-indigo-300 bg-white font-mono text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600"
+        />
+        <button onclick="applyCustomFormula()" class="px-3 py-1 bg-indigo-600 text-white font-bold rounded-xl text-xs active:scale-95">
+          繪製
+        </button>
+        <button onclick="cyclePresetFormula()" class="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl text-xs active:scale-95" title="切換範例公式">
+          🎲 範例
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. 中央超緊湊參數滑桿列（2~3 個參數同時完整呈現，絕不需捲動） -->
+    <div id="sliders-container" class="flex-1 flex flex-col justify-center gap-1.5 sm:gap-2.5 my-1 min-h-0">
+      <!-- 由 JS 動態生成單行緊湊滑桿 -->
+    </div>
+
+    <!-- 3. 底部狀態訊息與觸控動作按鈕列 -->
+    <div class="shrink-0 flex flex-col gap-1.5">
+      <!-- 精簡狀態回饋條 -->
+      <div id="feedback-box" class="px-2.5 py-1 rounded-xl bg-slate-200/80 text-slate-700 text-[11px] sm:text-xs font-bold text-center truncate transition-colors">
+        拖動滑桿讓雷射線穿過所有星星，再按發射！
+      </div>
+
+      <!-- 底部主要按鈕列：關卡選單 + 重置 + 超大發射按鈕 -->
+      <div class="flex items-center gap-2">
+        <button
+          onclick="openLevelModal()"
+          class="px-3 py-2.5 sm:py-3 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-200 font-extrabold text-xs sm:text-sm shadow-sm active:scale-95 transition flex items-center justify-center gap-1 shrink-0"
+        >
+          <span>🗺️</span>
+          <span>關卡</span>
+        </button>
+
+        <button
+          onclick="resetLevelParams()"
+          class="px-3 py-2.5 sm:py-3 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-200 font-extrabold text-xs sm:text-sm shadow-sm active:scale-95 transition flex items-center justify-center gap-1 shrink-0"
+        >
+          <span>↺</span>
+          <span>重置</span>
+        </button>
+
+        <button
+          id="launch-btn"
+          onclick="launchShip()"
+          class="btn-launch flex-1 py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-black text-sm sm:text-base shadow-lg active:scale-95 transition flex items-center justify-center gap-1.5"
+        >
+          <span>🚀</span>
+          <span>發射雷射 (Launch)</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       關卡選擇抽屜彈窗 (Level Selector Modal)
+       ===================================================================== -->
+  <div id="level-modal" class="hidden fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
+    <div class="bg-white w-full max-w-md rounded-3xl p-4 sm:p-5 shadow-2xl border-2 border-indigo-100 max-h-[85dvh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🪐</span>
+          <h2 class="font-black text-base sm:text-lg text-slate-800">選擇太空任務關卡</h2>
+        </div>
+        <button onclick="closeLevelModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 font-black text-slate-600 flex items-center justify-center">
+          ✕
+        </button>
+      </div>
+      <div id="level-modal-list" class="mt-3 space-y-2 overflow-y-auto pr-1">
+        <!-- 由 JS 動態填充所有關卡卡片 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       過關慶祝覆蓋層 (Victory Overlay)
+       ===================================================================== -->
+  <div id="victory-modal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl border-4 border-amber-300 transform transition-all">
+      <div class="text-5xl mb-2 animate-bounce">🏆</div>
+      <h2 id="victory-title" class="text-xl sm:text-2xl font-black text-slate-900 mb-1">
+        任務大成功！
+      </h2>
+      <p id="victory-desc" class="text-xs sm:text-sm text-slate-600 font-bold mb-4">
+        太厲害了！你成功收集了本關所有宇宙星星！
+      </p>
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl py-2.5 px-4 mb-5 flex items-center justify-center gap-2">
+        <span class="text-2xl">⭐⭐⭐</span>
+        <span id="victory-formula-tag" class="font-mono font-black text-indigo-700 text-sm">y = x + 2</span>
+      </div>
+      <div class="flex gap-2.5">
+        <button
+          onclick="closeVictoryModal()"
+          class="flex-1 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-sm active:scale-95 transition"
+        >
+          留在這關
+        </button>
+        <button
+          id="victory-next-btn"
+          onclick="goToNextLevel()"
+          class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-sm shadow-lg active:scale-95 transition flex items-center justify-center gap-1"
+        >
+          <span>下一關</span>
+          <span>➡️</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*************************************************************************
+     * 1. Web Audio API 合成音效引擎（免外部音檔，純程式碼合成童趣太空音效）
+     *************************************************************************/
+    let audioCtx = null;
+    let isMuted = false;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          audioCtx = new AudioContext();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      const btn = document.getElementById('mute-btn');
+      btn.textContent = isMuted ? '🔇' : '🔊';
+      if (!isMuted) {
+        initAudio();
+        playTickSound(600);
+      }
+    }
+
+    // 滑桿微調的清脆音
+    function playTickSound(freq = 520) {
+      if (isMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.25, audioCtx.currentTime + 0.06);
+
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.065);
+    }
+
+    // 發射太空雷射音效
+    function playLaserSound() {
+      if (isMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.35);
+
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.36);
+    }
+
+    // 過關歡呼和弦 (C 大調上行琶音)
+    function playVictorySound() {
+      if (isMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        const startTime = audioCtx.currentTime + idx * 0.1;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.15, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.45);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.46);
+      });
+    }
+
+    // 撞到隕石或未全中提示音
+    function playBonkSound() {
+      if (isMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(190, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(110, audioCtx.currentTime + 0.28);
+
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    }
+
+    /*************************************************************************
+     * 2. 過關彩帶特效系統
+     *************************************************************************/
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const confettiCtx = confettiCanvas.getContext('2d');
+    let confettiParticles = [];
+    let confettiAnimId = null;
+
+    function resizeConfetti() {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+      if (calculator && !useFallbackCanvas) {
+        calculator.resize();
+      } else if (useFallbackCanvas) {
+        drawFallbackCanvas();
+      }
+    }
+    window.addEventListener('resize', resizeConfetti);
+    window.addEventListener('orientationchange', () => setTimeout(resizeConfetti, 150));
+    resizeConfetti();
+
+    function triggerConfetti() {
+      const colors = ['#facc15', '#38bdf8', '#a855f7', '#fb7185', '#34d399', '#fb923c'];
+      confettiParticles = [];
+      for (let i = 0; i < 110; i++) {
+        confettiParticles.push({
+          x: Math.random() * confettiCanvas.width,
+          y: -20 - Math.random() * 200,
+          w: 8 + Math.random() * 8,
+          h: 6 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 4,
+          vy: 3 + Math.random() * 5,
+          rot: Math.random() * 360,
+          vRot: (Math.random() - 0.5) * 10
+        });
+      }
+      if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+      animateConfetti();
+    }
+
+    function animateConfetti() {
+      confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      let activeCount = 0;
+      confettiParticles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vRot;
+        if (p.y < confettiCanvas.height + 30) {
+          activeCount++;
+          confettiCtx.save();
+          confettiCtx.translate(p.x, p.y);
+          confettiCtx.rotate((p.rot * Math.PI) / 180);
+          confettiCtx.fillStyle = p.color;
+          confettiCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          confettiCtx.restore();
+        }
+      });
+      if (activeCount > 0) {
+        confettiAnimId = requestAnimationFrame(animateConfetti);
+      } else {
+        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      }
+    }
+
+    /*************************************************************************
+     * 3. 關卡資料設計 (共 6 關 + 自由實驗室)
+     *************************************************************************/
+    const PARAM_META = {
+      m: {
+        label: '斜率 m',
+        shortTag: 'm',
+        color: '#2563eb',
+        badgeBg: 'bg-blue-600 text-white',
+        desc: (v) => v > 0 ? `斜率 m = +${v}：往右上爬坡！` : v < 0 ? `斜率 m = ${v}：往右下溜滑梯！` : `斜率 m = 0：完全水平飛行！`
+      },
+      b: {
+        label: '截距 b',
+        shortTag: 'b',
+        color: '#059669',
+        badgeBg: 'bg-emerald-600 text-white',
+        desc: (v) => v > 0 ? `截距 b = +${v}：電梯往上 ${v} 層` : v < 0 ? `截距 b = ${v}：電梯往下 ${Math.abs(v)} 層` : `截距 b = 0：停在原點高度`
+      },
+      a: {
+        label: '開口 a',
+        shortTag: 'a',
+        color: '#9333ea',
+        badgeBg: 'bg-purple-600 text-white',
+        desc: (v) => v > 0 ? `開口 a = +${v}：朝上笑臉弧線 😄` : v < 0 ? `開口 a = ${v}：朝下彩虹弧線 🌈` : `開口 a = 0：變成水平直線！`
+      },
+      h: {
+        label: '左右 h',
+        shortTag: 'h',
+        color: '#ea580c',
+        badgeBg: 'bg-orange-600 text-white',
+        desc: (v) => v > 0 ? `左右 h = +${v}：頂點往右移到 x=${v}` : v < 0 ? `左右 h = ${v}：頂點往左移到 x=${v}` : `左右 h = 0：頂點在中央 x=0`
+      },
+      k: {
+        label: '上下 k',
+        shortTag: 'k',
+        color: '#db2777',
+        badgeBg: 'bg-pink-600 text-white',
+        desc: (v) => v > 0 ? `上下 k = +${v}：頂點往上移到 y=${v}` : v < 0 ? `上下 k = ${v}：頂點往下移到 y=${v}` : `上下 k = 0：頂點高度在 y=0`
+      }
+    };
+
+    const LEVELS = [
+      {
+        id: 1,
+        shortName: '第 1 關',
+        title: '垂直電梯 y = x + b',
+        hint: 'b 就像電梯，決定線要往上還是往下移動！試試調大 b。',
+        type: 'linear_b',
+        params: [
+          { key: 'b', min: -6, max: 6, step: 0.5, initial: -2 }
+        ],
+        stars: [
+          { x: -3, y: -1, label: '⭐1' },
+          { x: 2, y: 4, label: '⭐2' }
+        ],
+        meteors: [],
+        evalFn: (x, p) => x + p.b,
+        toLatex: (p) => `y = x + (${p.b})`,
+        toHtmlEquation: (p) => {
+          const sign = p.b >= 0 ? '+' : '-';
+          return `y = x ${sign} <span class="text-emerald-400">${Math.abs(p.b)}</span>`;
+        }
+      },
+      {
+        id: 2,
+        shortName: '第 2 關',
+        title: '斜坡挑戰 y = mx',
+        hint: '線固定通過原點 (0,0)，調整斜率 m 改變傾斜陡度！',
+        type: 'linear_m',
+        params: [
+          { key: 'm', min: -4, max: 4, step: 0.5, initial: -1 }
+        ],
+        stars: [
+          { x: -2, y: -4, label: '⭐1' },
+          { x: 3, y: 6, label: '⭐2' }
+        ],
+        meteors: [],
+        evalFn: (x, p) => p.m * x,
+        toLatex: (p) => `y = ${p.m}x`,
+        toHtmlEquation: (p) => `y = <span class="text-sky-400">${p.m}</span>x`
+      },
+      {
+        id: 3,
+        shortName: '第 3 關',
+        title: '雙重任務 y = mx + b',
+        hint: '先用 b 調整高度避開紅色隕石，再用 m 旋轉角度對準星星！',
+        type: 'linear_mb',
+        params: [
+          { key: 'm', min: -3, max: 3, step: 0.5, initial: 0 },
+          { key: 'b', min: -6, max: 6, step: 0.5, initial: 1 }
+        ],
+        stars: [
+          { x: -2, y: -4, label: '⭐1' },
+          { x: 5, y: 3, label: '⭐2' }
+        ],
+        meteors: [
+          { x: 1, y: 1, label: '☄️' }
+        ],
+        evalFn: (x, p) => p.m * x + p.b,
+        toLatex: (p) => `y = ${p.m}x + (${p.b})`,
+        toHtmlEquation: (p) => {
+          const sign = p.b >= 0 ? '+' : '-';
+          return `y = <span class="text-sky-400">${p.m}</span>x ${sign} <span class="text-emerald-400">${Math.abs(p.b)}</span>`;
+        }
+      },
+      {
+        id: 4,
+        shortName: '第 4 關',
+        title: '下坡閃避隕石 y = mx + b',
+        hint: '三顆星星排成往右下傾斜的下坡直線，把斜率 m 調成負數試試！',
+        type: 'linear_mb_hard',
+        params: [
+          { key: 'm', min: -3, max: 3, step: 0.5, initial: -0.5 },
+          { key: 'b', min: -6, max: 6, step: 0.5, initial: 1 }
+        ],
+        stars: [
+          { x: -3, y: 6, label: '⭐1' },
+          { x: 1, y: 2, label: '⭐2' },
+          { x: 5, y: -2, label: '⭐3' }
+        ],
+        meteors: [
+          { x: -1, y: 1, label: '☄️' },
+          { x: 3, y: 3, label: '☄️' }
+        ],
+        evalFn: (x, p) => p.m * x + p.b,
+        toLatex: (p) => `y = ${p.m}x + (${p.b})`,
+        toHtmlEquation: (p) => {
+          const sign = p.b >= 0 ? '+' : '-';
+          return `y = <span class="text-sky-400">${p.m}</span>x ${sign} <span class="text-emerald-400">${Math.abs(p.b)}</span>`;
+        }
+      },
+      {
+        id: 5,
+        shortName: '第 5 關',
+        title: '太空拋物線 y = a(x - h)² + k',
+        hint: '把頂點 (h, k) 移到中間最高星 (0, 5)，再讓開口 a 為負數形成彩虹弧線！',
+        type: 'parabola',
+        params: [
+          { key: 'a', min: -2, max: 2, step: 0.5, initial: -0.5 },
+          { key: 'h', min: -5, max: 5, step: 1, initial: -2 },
+          { key: 'k', min: -5, max: 6, step: 1, initial: 1 }
+        ],
+        stars: [
+          { x: -4, y: -3, label: '⭐1' },
+          { x: 0, y: 5, label: '⭐2' },
+          { x: 4, y: -3, label: '⭐3' }
+        ],
+        meteors: [
+          { x: 0, y: 1, label: '☄️' }
+        ],
+        evalFn: (x, p) => p.a * Math.pow(x - p.h, 2) + p.k,
+        toLatex: (p) => `y = ${p.a}(x - (${p.h}))^2 + (${p.k})`,
+        toHtmlEquation: (p) => {
+          const hSign = p.h >= 0 ? '-' : '+';
+          const kSign = p.k >= 0 ? '+' : '-';
+          return `y = <span class="text-purple-400">${p.a}</span>(x ${hSign} <span class="text-orange-400">${Math.abs(p.h)}</span>)² ${kSign} <span class="text-pink-400">${Math.abs(p.k)}</span>`;
+        }
+      },
+      {
+        id: 6,
+        shortName: '第 6 關',
+        title: 'V字雷射盾 y = a|x - h| + k',
+        hint: '絕對值圖形像 V 字反彈！把尖角頂點 (h, k) 對準下方星星 (1, -3)。',
+        type: 'abs',
+        params: [
+          { key: 'a', min: -2, max: 2, step: 0.5, initial: 1 },
+          { key: 'h', min: -5, max: 5, step: 1, initial: -2 },
+          { key: 'k', min: -5, max: 5, step: 1, initial: 0 }
+        ],
+        stars: [
+          { x: -4, y: 2, label: '⭐1' },
+          { x: 1, y: -3, label: '⭐2' },
+          { x: 6, y: 2, label: '⭐3' }
+        ],
+        meteors: [
+          { x: 1, y: 1, label: '☄️' },
+          { x: -2, y: -2, label: '☄️' }
+        ],
+        evalFn: (x, p) => p.a * Math.abs(x - p.h) + p.k,
+        toLatex: (p) => `y = ${p.a}\\left|x - (${p.h})\\right| + (${p.k})`,
+        toHtmlEquation: (p) => {
+          const hSign = p.h >= 0 ? '-' : '+';
+          const kSign = p.k >= 0 ? '+' : '-';
+          return `y = <span class="text-purple-400">${p.a}</span>|x ${hSign} <span class="text-orange-400">${Math.abs(p.h)}</span>| ${kSign} <span class="text-pink-400">${Math.abs(p.k)}</span>`;
+        }
+      },
+      {
+        id: 7,
+        shortName: '自由實驗室',
+        title: '🧪 自由函數創造實驗室',
+        hint: '輸入任意公式（如 sin(x) 或 0.5x^2），並用滑桿觀察波形變化！',
+        type: 'free',
+        params: [
+          { key: 'a', min: -4, max: 4, step: 0.5, initial: 2 },
+          { key: 'b', min: -4, max: 4, step: 0.5, initial: 1 },
+          { key: 'k', min: -5, max: 5, step: 0.5, initial: 0 }
+        ],
+        stars: [],
+        meteors: [],
+        evalFn: (x, p) => customEvalFunction(x, p),
+        toLatex: (p) => customLatexFormula,
+        toHtmlEquation: (p) => `<span class="text-amber-300">${escapeHtml(customRawFormula)}</span>`
+      }
+    ];
+
+    /*************************************************************************
+     * 4. 遊戲狀態變數與 Desmos 初始化
+     *************************************************************************/
+    let currentLevelIdx = 0;
+    let currentParams = {};
+    let completedLevels = new Set();
+    let calculator = null;
+    let useFallbackCanvas = false;
+    let isAnimatingShip = false;
+    let shipAnimId = null;
+
+    // 自由實驗室公式狀態
+    let customRawFormula = 'y = a * sin(b * x) + k';
+    let customLatexFormula = 'y = a \\sin(b x) + k';
+    const PRESET_FORMULAS = [
+      'y = a * sin(b * x) + k',
+      'y = a * cos(b * x) + k',
+      'y = a * x^2 + k',
+      'y = a * abs(x) + k'
+    ];
+    let presetIdx = 0;
+
+    function cyclePresetFormula() {
+      presetIdx = (presetIdx + 1) % PRESET_FORMULAS.length;
+      document.getElementById('custom-func-input').value = PRESET_FORMULAS[presetIdx];
+      applyCustomFormula();
+    }
+
+    // 將目前關卡的函數線、星星、隕石同步繪製到 Desmos（或備援 Canvas）
+    function syncGraphExpressions(shipPos = null) {
+      const lvl = LEVELS[currentLevelIdx];
+
+      if (useFallbackCanvas) {
+        drawFallbackCanvas(shipPos);
+        return;
+      }
+      if (!calculator) return;
+
+      // 清除舊的非使用中運算式
+      const existingIds = calculator.getExpressions().map(e => e.id);
+      const keepIds = new Set(['player-curve', 'ship-point', 'ship-halo']);
+
+      // 在自由實驗室模式注入參數變數供自訂公式使用
+      if (lvl.type === 'free') {
+        ['a', 'b', 'h', 'k'].forEach(k => {
+          const id = `param-${k}`;
+          keepIds.add(id);
+          calculator.setExpression({ id, latex: `${k} = ${currentParams[k]}` });
+        });
+      }
+
+      // 1. 繪製玩家雷射軌道函數
+      calculator.setExpression({
+        id: 'player-curve',
+        latex: lvl.toLatex(currentParams),
+        color: '#4f46e5',
+        lineWidth: 4.5,
+        lineStyle: Desmos.Styles.SOLID
+      });
+
+      // 2. 繪製目標星星
+      lvl.stars.forEach((s, idx) => {
+        const id = `star-${idx}`;
+        const ringId = `star-ring-${idx}`;
+        keepIds.add(id);
+        keepIds.add(ringId);
+
+        calculator.setExpression({
+          id: ringId,
+          latex: `(x - (${s.x}))^2 + (y - (${s.y}))^2 = 0.45^2`,
+          color: '#f59e0b',
+          lineWidth: 1.5,
+          lineStyle: Desmos.Styles.DASHED,
+          fill: true,
+          fillOpacity: 0.15
+        });
+
+        calculator.setExpression({
+          id,
+          latex: `(${s.x}, ${s.y})`,
+          color: '#eab308',
+          pointSize: 16,
+          pointStyle: Desmos.PointStyles.POINT,
+          label: s.label,
+          showLabel: true,
+          labelOrientation: Desmos.LabelOrientations.ABOVE
+        });
+      });
+
+      // 3. 繪製太空隕石與警戒圈
+      lvl.meteors.forEach((m, idx) => {
+        const id = `meteor-${idx}`;
+        const zoneId = `meteor-zone-${idx}`;
+        keepIds.add(id);
+        keepIds.add(zoneId);
+
+        calculator.setExpression({
+          id: zoneId,
+          latex: `(x - (${m.x}))^2 + (y - (${m.y}))^2 = 0.65^2`,
+          color: '#ef4444',
+          lineWidth: 2,
+          lineStyle: Desmos.Styles.DOTTED,
+          fill: true,
+          fillOpacity: 0.2
+        });
+
+        calculator.setExpression({
+          id,
+          latex: `(${m.x}, ${m.y})`,
+          color: '#dc2626',
+          pointSize: 18,
+          pointStyle: Desmos.PointStyles.CROSS,
+          label: m.label,
+          showLabel: true,
+          labelOrientation: Desmos.LabelOrientations.BELOW
+        });
+      });
+    // 初始化 Desmos 計算機（極簡全幅設定，隱藏多餘工具列）
+    function initDesmos() {
+      const elt = document.getElementById('calculator');
+      if (window.desmosLoadFailed || typeof Desmos === 'undefined') {
+        enableFallbackCanvas();
+        return;
+      }
+
+      try {
+        calculator = Desmos.GraphingCalculator(elt, {
+          expressions: false,
+          settingsMenu: false,
+          zoomButtons: false,
+          expressionsTopbar: false,
+          lockViewport: false,
+          border: false,
+          keypad: false,
+          xAxisLabel: 'x',
+          yAxisLabel: 'y',
+          xAxisStep: 1,
+          yAxisStep: 1
+        });
+
+        resetViewBounds();
+      } catch (err) {
+        console.error('Desmos 初始化失敗:', err);
+        enableFallbackCanvas();
+      }
+    }
+
+    /*************************************************************************
+     * 5. 渲染關卡介面、關卡抽屜選單與 Desmos 即時發光互動
+     *************************************************************************/
+    function openLevelModal() {
+      playTickSound(560);
+      renderLevelModal();
+      document.getElementById('level-modal').classList.remove('hidden');
+    }
+
+    function closeLevelModal() {
+      playTickSound(440);
+      document.getElementById('level-modal').classList.add('hidden');
+    }
+
+    function closeVictoryModal() {
+      document.getElementById('victory-modal').classList.add('hidden');
+    }
+
+    function renderLevelModal() {
+      const list = document.getElementById('level-modal-list');
+      list.innerHTML = '';
+      LEVELS.forEach((lvl, idx) => {
+        const isCurrent = idx === currentLevelIdx;
+        const isDone = completedLevels.has(lvl.id);
+        const btn = document.createElement('button');
+        btn.onclick = () => {
+          closeLevelModal();
+          loadLevel(idx);
+        };
+        btn.className = `w-full text-left p-3 rounded-2xl border-2 transition flex items-center justify-between ${
+          isCurrent
+            ? 'bg-indigo-50 border-indigo-500 shadow-sm'
+            : isDone
+            ? 'bg-emerald-50/70 border-emerald-200 hover:bg-emerald-50'
+            : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+        }`;
+        btn.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black px-2 py-0.5 rounded-full ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'}">
+                ${lvl.shortName}
+              </span>
+              <span class="font-extrabold text-sm text-slate-800">${lvl.title}</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1 line-clamp-1">${lvl.hint}</p>
+          </div>
+          <span class="text-lg ml-2">${isDone ? '✅' : isCurrent ? '🚀' : '➡️'}</span>
+        `;
+        list.appendChild(btn);
+      });
+    }
+
+    function updateStarCounterHUD(liveHits = null) {
+      let totalStars = 0;
+      let maxStars = 0;
+      LEVELS.forEach(l => {
+        maxStars += l.stars.length;
+        if (completedLevels.has(l.id)) {
+          totalStars += l.stars.length;
+        }
+      });
+      document.getElementById('total-stars-count').textContent = totalStars;
+      document.getElementById('max-stars-count').textContent = maxStars;
+
+      const lvl = LEVELS[currentLevelIdx];
+      const hudPill = document.getElementById('hud-star-pill');
+      const hudStatus = document.getElementById('hud-star-status');
+      if (lvl.type === 'free') {
+        hudStatus.textContent = '自由模式';
+        hudPill.className = 'bg-slate-900/85 backdrop-blur-md text-sky-300 border border-sky-400/40 rounded-full px-2.5 py-1 text-xs font-black shadow-md flex items-center gap-1';
+      } else {
+        const hitCount = liveHits ? liveHits.filter(Boolean).length : 0;
+        hudStatus.textContent = `${hitCount} / ${lvl.stars.length}`;
+        if (hitCount === lvl.stars.length) {
+          hudPill.className = 'bg-amber-400 text-slate-950 border border-amber-200 rounded-full px-2.5 py-1 text-xs font-black shadow-md flex items-center gap-1 scale-105 transition-all';
+        } else {
+          hudPill.className = 'bg-slate-900/85 backdrop-blur-md text-amber-300 border border-amber-400/40 rounded-full px-2.5 py-1 text-xs font-black shadow-md flex items-center gap-1 transition-all';
+        }
+      }
+    }
+
+    function loadLevel(idx) {
+      stopShipAnimation();
+      closeVictoryModal();
+      currentLevelIdx = idx;
+      const lvl = LEVELS[idx];
+
+      // 複製初始參數
+      currentParams = {};
+      lvl.params.forEach(p => {
+        currentParams[p.key] = p.initial;
+      });
+
+      // 更新 HUD 與標題
+      document.getElementById('hud-level-badge').textContent = lvl.shortName;
+      document.getElementById('level-title').textContent = `${lvl.shortName}：${lvl.title}`;
+      document.getElementById('live-hint-text').textContent = lvl.hint;
+      document.getElementById('legend-meteor').style.display = lvl.meteors.length > 0 ? 'flex' : 'none';
+
+      // 自由實驗室切換
+      const freeBox = document.getElementById('free-lab-controls');
+      const launchBtn = document.getElementById('launch-btn');
+
+      if (lvl.type === 'free') {
+        freeBox.classList.remove('hidden');
+        launchBtn.innerHTML = '<span>🛸</span><span>試飛巡航！</span>';
+      } else {
+        freeBox.classList.add('hidden');
+        launchBtn.innerHTML = '<span>🚀</span><span>發射雷射 (Launch)</span>';
+      }
+
+      setFeedback('拖動滑桿讓雷射線穿過所有星星，再按發射！', 'neutral');
+      renderSliders();
+      syncGraphExpressions();
+    }
+
+    function resetLevelParams() {
+      playTickSound(440);
+      const lvl = LEVELS[currentLevelIdx];
+      lvl.params.forEach(p => {
+        currentParams[p.key] = p.initial;
+      });
+      document.getElementById('live-hint-text').textContent = lvl.hint;
+      renderSliders();
+      syncGraphExpressions();
+    }
+
+    // 生成超緊湊單行滑桿（即使有 3 個參數 a, h, k 也能在同一畫面完整顯示無需捲動）
+    function renderSliders() {
+      const container = document.getElementById('sliders-container');
+      container.innerHTML = '';
+      const lvl = LEVELS[currentLevelIdx];
+
+      lvl.params.forEach(pCfg => {
+        const meta = PARAM_META[pCfg.key];
+        const val = currentParams[pCfg.key];
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2 bg-white px-2.5 py-1.5 sm:py-2 rounded-2xl border border-slate-200 shadow-sm';
+        row.innerHTML = `
+          <!-- 參數彩色徽章與數值 -->
+          <div class="flex items-center gap-1 shrink-0 min-w-[4.6rem]">
+            <span class="w-5 h-5 rounded-md text-[11px] font-black flex items-center justify-center ${meta.badgeBg}">
+              ${meta.shortTag}
+            </span>
+            <span id="val-badge-${pCfg.key}" class="font-mono font-black text-xs sm:text-sm text-slate-900">
+              ${val > 0 ? '+' + val : val}
+            </span>
+          </div>
+
+          <!-- 減號觸控按鈕 -->
+          <button
+            onclick="stepParam('${pCfg.key}', -${pCfg.step})"
+            class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 hover:bg-indigo-100 active:bg-indigo-200 border border-slate-300 font-black text-slate-800 text-base flex items-center justify-center shrink-0 active:scale-90 transition"
+            aria-label="減少 ${pCfg.key}"
+          >−</button>
+
+          <!-- 觸控滑桿 -->
+          <input
+            id="slider-${pCfg.key}"
+            type="range"
+            class="space-slider flex-1 min-w-0"
+            style="--thumb-color: ${meta.color};"
+            min="${pCfg.min}"
+            max="${pCfg.max}"
+            step="${pCfg.step}"
+            value="${val}"
+            oninput="onSliderInput('${pCfg.key}', this.value)"
+          />
+
+          <!-- 加號觸控按鈕 -->
+          <button
+            onclick="stepParam('${pCfg.key}', ${pCfg.step})"
+            class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 hover:bg-indigo-100 active:bg-indigo-200 border border-slate-300 font-black text-slate-800 text-base flex items-center justify-center shrink-0 active:scale-90 transition"
+            aria-label="增加 ${pCfg.key}"
+          >+</button>
+        `;
+        container.appendChild(row);
+      });
+
+      updateEquationText();
+    }
+
+    function onSliderInput(key, rawVal) {
+      const val = parseFloat(rawVal);
+      currentParams[key] = val;
+      playTickSound(420 + val * 25);
+      updateParamUI(key, val);
+      syncGraphExpressions();
+    }
+
+    function stepParam(key, delta) {
+      const lvl = LEVELS[currentLevelIdx];
+      const cfg = lvl.params.find(p => p.key === key);
+      if (!cfg) return;
+
+      let nextVal = Math.round((currentParams[key] + delta) * 10) / 10;
+      nextVal = Math.max(cfg.min, Math.min(cfg.max, nextVal));
+      currentParams[key] = nextVal;
+
+      const slider = document.getElementById(`slider-${key}`);
+      if (slider) slider.value = nextVal;
+
+      playTickSound(460 + nextVal * 25);
+      updateParamUI(key, nextVal);
+      syncGraphExpressions();
+    }
+
+    function updateParamUI(key, val) {
+      const meta = PARAM_META[key];
+      const badge = document.getElementById(`val-badge-${key}`);
+      if (badge) badge.textContent = val > 0 ? `+${val}` : `${val}`;
+      // 即時更新單行提示列白話文解釋
+      document.getElementById('live-hint-text').textContent = meta.desc(val);
+      updateEquationText();
+    }
+
+    function updateEquationText() {
+      const lvl = LEVELS[currentLevelIdx];
+      document.getElementById('hud-equation-display').innerHTML = lvl.toHtmlEquation(currentParams);
+    }
+
+    function applyCustomFormula() {
+      const input = document.getElementById('custom-func-input').value;
+      parseCustomFormula(input);
+      playTickSound(640);
+      updateEquationText();
+      syncGraphExpressions();
+    }
+
+    // 將目前關卡的函數線、星星（含即時點亮狀態）、隕石同步繪製到 Desmos（或備援 Canvas）
+    function syncGraphExpressions(shipPos = null) {
+      const lvl = LEVELS[currentLevelIdx];
+      // 即時計算目前曲線是否已經對準星星，提供 60fps 視覺回饋
+      const liveEval = evaluateTrajectory();
+      updateStarCounterHUD(liveEval.starHits);
+
+      if (useFallbackCanvas) {
+        drawFallbackCanvas(shipPos, liveEval.starHits);
+        return;
+      }
+      if (!calculator) return;
+
+      const existingIds = calculator.getExpressions().map(e => e.id);
+      const keepIds = new Set(['player-curve', 'ship-point', 'ship-halo']);
+
+      if (lvl.type === 'free') {
+        ['a', 'b', 'h', 'k'].forEach(k => {
+          const id = `param-${k}`;
+          keepIds.add(id);
+          calculator.setExpression({ id, latex: `${k} = ${currentParams[k] ?? 0}` });
+        });
+      }
+
+      // 1. 繪製玩家雷射軌道函數（若全中且避開隕石則變為翡翠綠發光提示！）
+      const curveColor = liveEval.passed ? '#10b981' : '#4f46e5';
+      calculator.setExpression({
+        id: 'player-curve',
+        latex: lvl.toLatex(currentParams),
+        color: curveColor,
+        lineWidth: liveEval.passed ? 5.5 : 4.5,
+        lineStyle: Desmos.Styles.SOLID
+      });
+
+      // 2. 繪製目標星星（若雷射線已穿過該星星，立即放大並亮起金黃光圈！）
+      lvl.stars.forEach((s, idx) => {
+        const isLit = liveEval.starHits && liveEval.starHits[idx];
+        const id = `star-${idx}`;
+        const ringId = `star-ring-${idx}`;
+        keepIds.add(id);
+        keepIds.add(ringId);
+
+        calculator.setExpression({
+          id: ringId,
+          latex: `(x - (${s.x}))^2 + (y - (${s.y}))^2 = ${isLit ? '0.68^2' : '0.45^2'}`,
+          color: isLit ? '#10b981' : '#f59e0b',
+          lineWidth: isLit ? 2.5 : 1.5,
+          lineStyle: isLit ? Desmos.Styles.SOLID : Desmos.Styles.DASHED,
+          fill: true,
+          fillOpacity: isLit ? 0.35 : 0.14
+        });
+
+        calculator.setExpression({
+          id,
+          latex: `(${s.x}, ${s.y})`,
+          color: isLit ? '#10b981' : '#eab308',
+          pointSize: isLit ? 22 : 16,
+          pointStyle: Desmos.PointStyles.POINT,
+          label: isLit ? `✨${s.label}` : s.label,
+          showLabel: true,
+          labelOrientation: Desmos.LabelOrientations.ABOVE
+        });
+      });
+
+      // 3. 繪製太空隕石與警戒圈
+      lvl.meteors.forEach((m, idx) => {
+        const id = `meteor-${idx}`;
+        const zoneId = `meteor-zone-${idx}`;
+        keepIds.add(id);
+        keepIds.add(zoneId);
+
+        calculator.setExpression({
+          id: zoneId,
+          latex: `(x - (${m.x}))^2 + (y - (${m.y}))^2 = 0.65^2`,
+          color: '#ef4444',
+          lineWidth: 2,
+          lineStyle: Desmos.Styles.DOTTED,
+          fill: true,
+          fillOpacity: 0.2
+        });
+
+        calculator.setExpression({
+          id,
+          latex: `(${m.x}, ${m.y})`,
+          color: '#dc2626',
+          pointSize: 17,
+          pointStyle: Desmos.PointStyles.CROSS,
+          label: m.label,
+          showLabel: true,
+          labelOrientation: Desmos.LabelOrientations.BELOW
+        });
+      });
+
+      // 4. 繪製發射中的太空船光點
+      if (shipPos && Number.isFinite(shipPos.y)) {
+        calculator.setExpression({
+          id: 'ship-halo',
+          latex: `(${shipPos.x}, ${shipPos.y})`,
+          color: '#38bdf8',
+          pointSize: 28,
+          pointOpacity: 0.45
+        });
+        calculator.setExpression({
+          id: 'ship-point',
+          latex: `(${shipPos.x}, ${shipPos.y})`,
+          color: '#0284c7',
+          pointSize: 14,
+          label: '🚀',
+          showLabel: true,
+          labelOrientation: Desmos.LabelOrientations.RIGHT
+        });
+      } else {
+        calculator.removeExpressions([{ id: 'ship-point' }, { id: 'ship-halo' }]);
+      }
+
+      const toRemove = existingIds.filter(id => !keepIds.has(id)).map(id => ({ id }));
+      if (toRemove.length > 0) {
+        calculator.removeExpressions(toRemove);
+      }
+    }
+
+    /*************************************************************************
+     * 6. 離線備援 HTML5 Canvas 座標畫布 (當 Desmos API 無法載入時自動接手)
+     *************************************************************************/
+    function drawFallbackCanvas(shipPos = null, starHits = []) {
+      const canvas = document.getElementById('fallback-canvas');
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      const ctx = canvas.getContext('2d');
+
+      const xMin = -10, xMax = 10, yMin = -8, yMax = 8;
+      const toPxX = x => ((x - xMin) / (xMax - xMin)) * canvas.width;
+      const toPxY = y => canvas.height - ((y - yMin) / (yMax - yMin)) * canvas.height;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 畫格線
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      for (let x = xMin; x <= xMax; x++) {
+        ctx.beginPath();
+        ctx.moveTo(toPxX(x), 0);
+        ctx.lineTo(toPxX(x), canvas.height);
+        ctx.stroke();
+      }
+      for (let y = yMin; y <= yMax; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, toPxY(y));
+        ctx.lineTo(canvas.width, toPxY(y));
+        ctx.stroke();
+      }
+
+      // 畫 X, Y 主軸
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, toPxY(0));
+      ctx.lineTo(canvas.width, toPxY(0));
+      ctx.moveTo(toPxX(0), 0);
+      ctx.lineTo(toPxX(0), canvas.height);
+      ctx.stroke();
+
+      // 刻度數字
+      ctx.fillStyle = '#64748b';
+      ctx.font = '11px sans-serif';
+      for (let x = xMin + 1; x < xMax; x++) {
+        if (x !== 0) ctx.fillText(x, toPxX(x) - 4, toPxY(0) + 14);
+      }
+      for (let y = yMin + 1; y < yMax; y++) {
+        if (y !== 0) ctx.fillText(y, toPxX(0) + 6, toPxY(y) + 4);
+      }
+
+      const lvl = LEVELS[currentLevelIdx];
+
+      // 畫函數曲線
+      ctx.strokeStyle = '#4f46e5';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      let started = false;
+      for (let x = xMin; x <= xMax; x += 0.05) {
+        const y = lvl.evalFn(x, currentParams);
+        if (Number.isFinite(y) && y >= yMin - 5 && y <= yMax + 5) {
+          if (!started) {
+            ctx.moveTo(toPxX(x), toPxY(y));
+            started = true;
+          } else {
+            ctx.lineTo(toPxX(x), toPxY(y));
+          }
+        } else {
+          started = false;
+        }
+      }
+      ctx.stroke();
+
+      // 畫隕石
+      lvl.meteors.forEach(m => {
+        const px = toPxX(m.x), py = toPxY(m.y);
+        const rPx = (0.65 / (xMax - xMin)) * canvas.width;
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+        ctx.beginPath();
+        ctx.arc(px, py, rPx, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(px, py, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(m.label, px - 22, py + 22);
+      });
+
+      // 畫星星
+      lvl.stars.forEach((s, idx) => {
+        const isLit = starHits && starHits[idx];
+        const px = toPxX(s.x), py = toPxY(s.y);
+        const rPx = ((isLit ? 0.68 : 0.45) / (xMax - xMin)) * canvas.width;
+        ctx.fillStyle = isLit ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.2)';
+        ctx.beginPath();
+        ctx.arc(px, py, rPx, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = isLit ? '#10b981' : '#eab308';
+        ctx.beginPath();
+        ctx.arc(px, py, isLit ? 10 : 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#92400e';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(isLit ? `✨${s.label}` : s.label, px - 16, py - 12);
+      });
+
+      // 畫飛船
+      if (shipPos && Number.isFinite(shipPos.y)) {
+        const px = toPxX(shipPos.x), py = toPxY(shipPos.y);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+        ctx.beginPath();
+        ctx.arc(px, py, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.arc(px, py, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    /*************************************************************************
+     * 7. 數學碰撞檢測與飛船發射動畫
+     *************************************************************************/
+    function evaluateTrajectory() {
+      const lvl = LEVELS[currentLevelIdx];
+      if (lvl.type === 'free') {
+        return { isFree: true };
+      }
+
+      const starHits = new Array(lvl.stars.length).fill(false);
+      let hitMeteor = null;
+
+      // 在 x ∈ [-10, 10] 區間以高密度取樣 0.025 單位計算精確歐幾里得距離
+      for (let x = -10; x <= 10; x += 0.025) {
+        const y = lvl.evalFn(x, currentParams);
+        if (!Number.isFinite(y)) continue;
+
+        // 檢查是否撞到隕石 (半徑 0.65)
+        for (let m of lvl.meteors) {
+          const distM = Math.hypot(x - m.x, y - m.y);
+          if (distM < 0.65) {
+            hitMeteor = m;
+          }
+        }
+
+        // 檢查是否命中星星 (半徑 0.45)
+        lvl.stars.forEach((s, idx) => {
+          const distS = Math.hypot(x - s.x, y - s.y);
+          if (distS < 0.45) {
+            starHits[idx] = true;
+          }
+        });
+      }
+
+      const hitCount = starHits.filter(Boolean).length;
+      const allStarsHit = hitCount === lvl.stars.length;
+
+      return {
+        isFree: false,
+        hitMeteor,
+        starHits,
+        hitCount,
+        totalStars: lvl.stars.length,
+        allStarsHit,
+        passed: !hitMeteor && allStarsHit
+      };
+    }
+
+    function stopShipAnimation() {
+      if (shipAnimId) {
+        cancelAnimationFrame(shipAnimId);
+        shipAnimId = null;
+      }
+      isAnimatingShip = false;
+    }
+
+    function launchShip() {
+      if (isAnimatingShip) return;
+      playLaserSound();
+      isAnimatingShip = true;
+
+      const lvl = LEVELS[currentLevelIdx];
+      const result = evaluateTrajectory();
+
+      setFeedback('🚀 太空船沿著函數軌道高速飛行中...', 'info');
+
+      let currentX = -9.5;
+      const endX = 9.5;
+      const speed = 0.38; // 每幀前進 x 單位
+
+      function step() {
+        const y = lvl.evalFn(currentX, currentParams);
+        syncGraphExpressions({ x: Number(currentX.toFixed(2)), y: Number(y.toFixed(2)) });
+
+        // 若途中撞到隕石，提前在隕石處停止並顯示警告
+        if (!result.isFree && result.hitMeteor && currentX >= result.hitMeteor.x) {
+          stopShipAnimation();
+          playBonkSound();
+          setFeedback(`💥 哎呀！太空船撞到了「${result.hitMeteor.label}」！再調整一下參數繞開它吧！`, 'error');
+          return;
+        }
+
+        currentX += speed;
+        if (currentX <= endX) {
+          shipAnimId = requestAnimationFrame(step);
+        } else {
+          stopShipAnimation();
+          syncGraphExpressions(null); // 清除飛船點
+          handleLaunchResult(result);
+        }
+      }
+
+      shipAnimId = requestAnimationFrame(step);
+    }
+
+    function handleLaunchResult(result) {
+      const lvl = LEVELS[currentLevelIdx];
+
+      if (result.isFree) {
+        playVictorySound();
+        setFeedback('✨ 巡航完成！你可以繼續修改公式或調整參數觀察曲線變化！', 'success');
+        return;
+      }
+
+      if (result.hitMeteor) {
+        playBonkSound();
+        setFeedback(`💥 危險！軌道太靠近「${result.hitMeteor.label}」了，請調整參數避開紅色警戒圈！`, 'error');
+        return;
+      }
+
+      if (result.passed) {
+        playVictorySound();
+        triggerConfetti();
+        completedLevels.add(lvl.id);
+        updateStarCounterHUD(result.starHits);
+
+        const nextBtn = document.getElementById('victory-next-btn');
+        if (currentLevelIdx < LEVELS.length - 1) {
+          nextBtn.classList.remove('hidden');
+          document.getElementById('victory-title').textContent = `${lvl.shortName} 通關成功！`;
+          document.getElementById('victory-desc').textContent = `太棒了！你成功收集全部 ${result.totalStars} 顆宇宙星星！`;
+        } else {
+          nextBtn.classList.add('hidden');
+          document.getElementById('victory-title').textContent = '🏆 全部任務破關！';
+          document.getElementById('victory-desc').textContent = '恭喜你成為真正的「函數太空小英雄」！';
+        }
+        document.getElementById('victory-formula-tag').innerHTML = lvl.toHtmlEquation(currentParams);
+        document.getElementById('victory-modal').classList.remove('hidden');
+        setFeedback(`🎉 恭喜過關！成功收集全部 ${result.totalStars} 顆星星！`, 'success');
+      } else {
+        playBonkSound();
+        setFeedback(`⭐ 目前瞄準了 ${result.hitCount} / ${result.totalStars} 顆星星，再微調看看！`, 'warning');
+      }
+    }
+
+    function goToNextLevel() {
+      if (currentLevelIdx < LEVELS.length - 1) {
+        playTickSound(700);
+        closeVictoryModal();
+        loadLevel(currentLevelIdx + 1);
+      }
+    }
+
+    function setFeedback(msg, type) {
+      const box = document.getElementById('feedback-box');
+      box.textContent = msg;
+      box.className = 'px-2.5 py-1 rounded-xl text-[11px] sm:text-xs font-bold text-center truncate transition-colors border ';
+
+      if (type === 'success') {
+        box.className += 'bg-emerald-50 text-emerald-800 border-emerald-300';
+      } else if (type === 'error') {
+        box.className += 'bg-rose-50 text-rose-800 border-rose-300';
+      } else if (type === 'warning') {
+        box.className += 'bg-amber-50 text-amber-800 border-amber-300';
+      } else if (type === 'info') {
+        box.className += 'bg-sky-50 text-sky-800 border-sky-300';
+      } else {
+        box.className += 'bg-slate-200/80 text-slate-700 border-slate-200';
+      }
+    }
+
+    function goToNextLevel() {
+      if (currentLevelIdx < LEVELS.length - 1) {
+        playTickSound(700);
+        loadLevel(currentLevelIdx + 1);
+      }
+    }
+
+    function setFeedback(msg, type) {
+      const box = document.getElementById('feedback-box');
+      box.textContent = msg;
+      box.className = 'mt-4 p-3 rounded-2xl text-xs sm:text-sm font-bold text-center transition-all border ';
+
+      if (type === 'success') {
+        box.className += 'bg-emerald-50 text-emerald-800 border-emerald-300';
+      } else if (type === 'error') {
+        box.className += 'bg-rose-50 text-rose-800 border-rose-300';
+      } else if (type === 'warning') {
+        box.className += 'bg-amber-50 text-amber-800 border-amber-300';
+      } else if (type === 'info') {
+        box.className += 'bg-sky-50 text-sky-800 border-sky-300';
+      } else {
+        box.className += 'bg-slate-100 text-slate-700 border-slate-200';
+      }
+    }
+
+    // 頁面載入完成後啟動遊戲
+    window.onload = function () {
+      initDesmos();
+      loadLevel(0);
+    };
+  </script>
+</body>
+</html>

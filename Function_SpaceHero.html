@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>函數太空小英雄 Function Space Hero</title>
+  <style>
+    /* =====================================================================
+       1. 基礎重置與 iframe 安全全屏架構 (避免 100dvh 在沙盒中塌陷為 0px)
+       ===================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      min-height: 540px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #0f172a;
+      color: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      user-select: none;
+      overscroll-behavior: none;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        flex-direction: row;
+      }
+    }
+
+    /* =====================================================================
+       2. 上半部 / 左側：Desmos 風格座標畫布區 (佔 52% 高度)
+       ===================================================================== */
+    .graph-stage {
+      flex: 1 1 52%;
+      min-height: 240px;
+      width: 100%;
+      position: relative;
+      background: #ffffff;
+      border-bottom: 3px solid #6366f1;
+      overflow: hidden;
+    }
+
+    @media (min-width: 768px) {
+      .graph-stage {
+        flex: 1 1 60%;
+        height: 100%;
+        border-bottom: none;
+        border-right: 3px solid #6366f1;
+      }
+    }
+
+    #graph-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: pan-x pan-y;
+    }
+
+    #desmos-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      z-index: 5;
+    }
+
+    /* 頂部半透明懸浮 HUD 膠囊列 */
+    .hud-top-bar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .hud-pill {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #ffffff;
+      border: 1.5px solid rgba(129, 140, 248, 0.45);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.12s ease, background-color 0.2s ease;
+    }
+
+    .hud-pill:active {
+      transform: scale(0.95);
+    }
+
+    .hud-equation {
+      pointer-events: auto;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #f8fafc;
+      border: 2px solid #6366f1;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 54vw;
+    }
+
+    .hud-star-badge {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #fde047;
+      border: 1.5px solid rgba(250, 204, 21, 0.5);
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      transition: all 0.2s ease;
+    }
+
+    .hud-star-badge.all-lit {
+      background: #10b981;
+      color: #ffffff;
+      border-color: #a7f3d0;
+      transform: scale(1.06);
+    }
+
+    /* 畫布底部極簡圖例與音效控制 */
+    .hud-bottom-bar {
+      position: absolute;
+      bottom: 8px;
+      left: 10px;
+      right: 10px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .legend-chip {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .dot-star {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #f59e0b;
+      margin-right: 4px;
+    }
+
+    .dot-meteor {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #ef4444;
+      margin-right: 4px;
+    }
+
+    .icon-circle-btn {
+      pointer-events: auto;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid #cbd5e1;
+      background: rgba(255, 255, 255, 0.92);
+      color: #1e293b;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    .icon-circle-btn:active {
+      transform: scale(0.9);
+    }
+
+    /* =====================================================================
+       3. 下半部 / 右側：緊湊拇指控制面板 (佔 48% 高度，貼合座標圖)
+       ===================================================================== */
+    .control-deck {
+      flex: 0 0 auto;
+      max-height: 50%;
+      width: 100%;
+      background: #f8fafc;
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      overflow-y: auto;
+    }
+
+    @media (min-width: 768px) {
+      .control-deck {
+        flex: 0 0 40%;
+        max-height: 100%;
+        height: 100%;
+        padding: 18px;
+        gap: 12px;
+      }
+    }
+
+    /* 關卡標題與即時白話文幾何提示 */
+    .deck-header {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .level-title-text {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 900;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .total-score-pill {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 800;
+      color: #4338ca;
+      background: #e0e7ff;
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+
+    .hint-banner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 12px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      color: #1e1b4b;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .hint-banner.danger {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #991b1b;
+    }
+
+    .hint-banner.ready {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #065f46;
+    }
+
+    /* 自由實驗室公式輸入區 */
+    .free-lab-bar {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: #ffffff;
+      padding: 8px;
+      border-radius: 14px;
+      border: 1.5px solid #c7d2fe;
+    }
+
+    .free-lab-bar.active {
+      display: flex;
+    }
+
+    .free-input-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .free-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1.5px solid #94a3b8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .free-input:focus {
+      outline: none;
+      border-color: #4f46e5;
+    }
+
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .preset-chip {
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #f1f5f9;
+      color: #334155;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .preset-chip:active {
+      background: #e0e7ff;
+      border-color: #6366f1;
+    }
+
+    /* 參數滑桿清單 */
+    .sliders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .slider-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 14px;
+      border: 1.5px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .param-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 72px;
+      flex-shrink: 0;
+    }
+
+    .param-letter {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .param-val {
+      font-family: ui-monospace, monospace;
+      font-size: 14px;
+      font-weight: 900;
+      color: #0f172a;
+    }
+
+    .step-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1.5px solid #cbd5e1;
+      background: #f1f5f9;
+      color: #0f172a;
+      font-size: 18px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .step-btn:active {
+      background: #e0e7ff;
+      border-color: #6366f1;
+      transform: scale(0.92);
+    }
+
+    input[type="range"].param-range {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      min-width: 0;
+      height: 10px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      outline: none;
+      touch-action: pan-x;
+    }
+
+    input[type="range"].param-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent, #4f46e5);
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+      cursor: pointer;
+    }
+
+    input[type="range"].param-range::-moz-range-thumb {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent, #4f46e5);
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+      cursor: pointer;
+    }
+
+    /* 底部操作列 */
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-secondary {
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1.5px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .btn-secondary:active {
+      background: #f1f5f9;
+      transform: scale(0.95);
+    }
+
+    .btn-launch {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 16px;
+      border: none;
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+      transition: transform 0.12s ease;
+    }
+
+    .btn-launch:active {
+      transform: scale(0.96);
+    }
+
+    /* =====================================================================
+       4. 彈窗系統 (關卡選擇器 & 過關慶祝視窗 & 彩帶畫布)
+       ===================================================================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 420px;
+      max-height: 85%;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid #f1f5f9;
+    }
+
+    .level-list-scroll {
+      margin-top: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .level-item-btn {
+      width: 100%;
+      text-align: left;
+      padding: 11px 13px;
+      border-radius: 16px;
+      border: 2px solid #e2e8f0;
+      background: #f8fafc;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .level-item-btn.current {
+      background: #eef2ff;
+      border-color: #6366f1;
+    }
+
+    .level-item-btn.done {
+      background: #ecfdf5;
+      border-color: #6ee7b7;
+    }
+
+    .victory-card {
+      text-align: center;
+      border: 3px solid #facc15;
+    }
+
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 60;
+    }
+  </style>
+</head>
+<body>
+  <!-- 過關彩帶特效畫布 -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- =====================================================================
+       上半部：高解析度 Desmos 風格座標畫布 + 浮動 HUD
+       ===================================================================== -->
+  <section class="graph-stage" id="graph-stage">
+    <!-- 立即渲染的自建 Desmos 風格高DPI座標畫布 -->
+    <canvas id="graph-canvas"></canvas>
+    <!-- 選用：非同步載入的官方 Desmos 容器（若無網路或受限則維持隱藏不影響使用） -->
+    <div id="desmos-container"></div>
+
+    <!-- 頂部懸浮 HUD 膠囊 -->
+    <div class="hud-top-bar">
+      <button type="button" class="hud-pill" id="btn-open-levels" aria-label="開啟關卡選單">
+        <span>🚀</span>
+        <span id="hud-level-name">第 1 關</span>
+        <span style="font-size: 10px; opacity: 0.75;">▼</span>
+      </button>
+
+      <div class="hud-equation" id="hud-equation">y = x + 0</div>
+
+      <div class="hud-star-badge" id="hud-star-badge">
+        <span>⭐</span>
+        <span id="hud-star-count">0/3</span>
+      </div>
+    </div>
+
+    <!-- 底部極簡圖例與功能鈕 -->
+    <div class="hud-bottom-bar">
+      <div class="legend-chip">
+        <span><i class="dot-star"></i>星星目標</span>
+        <span id="legend-meteor-wrap"><i class="dot-meteor"></i>紅色隕石</span>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button type="button" class="icon-circle-btn" id="btn-toggle-sound" title="切換音效">🔊</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       下半部：緊湊拇指控制面板（滑桿與按鈕零距離貼合圖表）
+       ===================================================================== -->
+  <section class="control-deck">
+    <div class="deck-header">
+      <div class="title-row">
+        <h1 class="level-title-text" id="deck-title">第 1 關：直線小飛行</h1>
+        <span class="total-score-pill">累計 ⭐ <span id="total-stars-label">0</span>/<span id="max-stars-label">18</span></span>
+      </div>
+      <div class="hint-banner" id="hint-banner">
+        <span id="hint-icon">💡</span>
+        <span id="hint-text">拖動滑桿調整 b，讓雷射線穿過所有星星！</span>
+      </div>
+    </div>
+
+    <!-- 自由實驗室專用公式列 -->
+    <div class="free-lab-bar" id="free-lab-bar">
+      <div class="free-input-row">
+        <input type="text" class="free-input" id="custom-formula-input" value="a * sin(b * x) + k" placeholder="輸入公式如 sin(x) 或 x^2 - 4" />
+        <button type="button" class="btn-secondary" id="btn-apply-formula" style="padding: 6px 12px; background: #4f46e5; color: #fff; border-color: #4f46e5;">繪製</button>
+      </div>
+      <div class="preset-chips" id="preset-chips">
+        <button type="button" class="preset-chip" data-expr="a * sin(b * x) + k">a·sin(bx)+k</button>
+        <button type="button" class="preset-chip" data-expr="a * cos(b * x) + k">a·cos(bx)+k</button>
+        <button type="button" class="preset-chip" data-expr="a * x^2 + k">ax² + k</button>
+        <button type="button" class="preset-chip" data-expr="0.5 * x^3 - 2 * x + k">0.5x³ - 2x + k</button>
+      </div>
+    </div>
+
+    <!-- 參數滑桿容器 -->
+    <div class="sliders-list" id="sliders-list"></div>
+
+    <!-- 底部主要按鈕列 -->
+    <div class="action-row">
+      <button type="button" class="btn-secondary" id="btn-bottom-levels">🗺️ 關卡</button>
+      <button type="button" class="btn-secondary" id="btn-reset-params">↺ 重置</button>
+      <button type="button" class="btn-launch" id="btn-launch">🚀 發射雷射！</button>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       關卡選擇彈窗
+       ===================================================================== -->
+  <div class="modal-backdrop" id="levels-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <strong style="font-size: 16px; color: #0f172a;">🪐 選擇太空函數任務</strong>
+        <button type="button" class="icon-circle-btn" id="btn-close-levels">✕</button>
+      </div>
+      <div class="level-list-scroll" id="levels-list-container"></div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       過關慶祝彈窗
+       ===================================================================== -->
+  <div class="modal-backdrop" id="victory-modal">
+    <div class="modal-card victory-card">
+      <div style="font-size: 46px; margin-bottom: 4px;">🏆</div>
+      <h2 id="victory-title" style="margin: 0 0 6px; font-size: 20px; font-weight: 900; color: #0f172a;">任務大成功！</h2>
+      <p id="victory-msg" style="margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #475569;">太厲害了！雷射精準命中所有宇宙星星！</p>
+      <div id="victory-eq" style="background: #fefce8; border: 1.5px solid #fde047; border-radius: 14px; padding: 8px 12px; margin-bottom: 14px; font-family: monospace; font-size: 15px; font-weight: 900; color: #4338ca;">
+        y = x + 2
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="btn-secondary" id="btn-stay-level" style="flex: 1; justify-content: center;">留在這關</button>
+        <button type="button" class="btn-launch" id="btn-next-level" style="flex: 1.3;">下一關 ➡️</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* =====================================================================
+         1. 安全數學運算式解析器 (不依賴 eval / new Function，完全符合嚴格 CSP)
+         ===================================================================== */
+      function safeEvalMath(exprStr, scope) {
+        try {
+          if (!exprStr || typeof exprStr !== 'string') return NaN;
+          let s = exprStr.trim().toLowerCase();
+          if (s.startsWith('y=')) s = s.slice(2).trim();
+          else if (s.startsWith('y =')) s = s.slice(3).trim();
+
+          // 補齊隱含乘法，例如 2x -> 2*x, ax -> a*x, 2sin(x) -> 2*sin(x), )x -> )*x
+          s = s
+            .replace(/(\d)([a-z(])/g, '$1*$2')
+            .replace(/([a-z)])(\d)/g, '$1*$2')
+            .replace(/\)\s*\(/g, ')*(')
+            .replace(/\b([abhkx])\s*([abhkx])\b/g, '$1*$2')
+            .replace(/\b([abhkx])\s*\(/g, '$1*(');
+
+          // 詞法分析 (Tokenizer)
+          const tokens = [];
+          let i = 0;
+          while (i < s.length) {
+            const ch = s[i];
+            if (/\s/.test(ch)) {
+              i++;
+              continue;
+            }
+            if (/\d|\./.test(ch)) {
+              let num = '';
+              while (i < s.length && /[\d.]/.test(s[i])) {
+                num += s[i++];
+              }
+              tokens.push({ type: 'num', value: parseFloat(num) });
+              continue;
+            }
+            if (/[a-z]/.test(ch)) {
+              let id = '';
+              while (i < s.length && /[a-z]/.test(s[i])) {
+                id += s[i++];
+              }
+              if (['sin', 'cos', 'tan', 'abs', 'sqrt'].includes(id)) {
+                tokens.push({ type: 'fn', value: id });
+              } else if (id === 'pi') {
+                tokens.push({ type: 'num', value: Math.PI });
+              } else if (id === 'e') {
+                tokens.push({ type: 'num', value: Math.E });
+              } else if (Object.prototype.hasOwnProperty.call(scope, id)) {
+                tokens.push({ type: 'num', value: Number(scope[id]) });
+              } else {
+                return NaN;
+              }
+              continue;
+            }
+            if ('+-*/^()'.includes(ch)) {
+              tokens.push({ type: 'op', value: ch });
+              i++;
+              continue;
+            }
+            return NaN;
+          }
+
+          // 遞迴下降語法分析器 (Recursive Descent Parser)
+          let pos = 0;
+          function peek() { return tokens[pos]; }
+          function consume() { return tokens[pos++]; }
+
+          function parseExpression() {
+            let left = parseTerm();
+            while (peek() && peek().type === 'op' && (peek().value === '+' || peek().value === '-')) {
+              const op = consume().value;
+              const right = parseTerm();
+              left = op === '+' ? left + right : left - right;
+            }
+            return left;
+          }
+
+          function parseTerm() {
+            let left = parsePower();
+            while (peek() && peek().type === 'op' && (peek().value === '*' || peek().value === '/')) {
+              const op = consume().value;
+              const right = parsePower();
+              left = op === '*' ? left * right : (right === 0 ? NaN : left / right);
+            }
+            return left;
+          }
+
+          function parsePower() {
+            let base = parseUnary();
+            if (peek() && peek().type === 'op' && peek().value === '^') {
+              consume();
+              const exp = parsePower();
+              return Math.pow(base, exp);
+            }
+            return base;
+          }
+
+          function parseUnary() {
+            if (peek() && peek().type === 'op' && (peek().value === '+' || peek().value === '-')) {
+              const op = consume().value;
+              const val = parseUnary();
+              return op === '-' ? -val : val;
+            }
+            return parsePrimary();
+          }
+
+          function parsePrimary() {
+            const tok = peek();
+            if (!tok) return NaN;
+            if (tok.type === 'num') {
+              consume();
+              return tok.value;
+            }
+            if (tok.type === 'fn') {
+              const fnName = consume().value;
+              if (!peek() || peek().value !== '(') return NaN;
+              consume(); // '('
+              const arg = parseExpression();
+              if (!peek() || peek().value !== ')') return NaN;
+              consume(); // ')'
+              if (fnName === 'sin') return Math.sin(arg);
+              if (fnName === 'cos') return Math.cos(arg);
+              if (fnName === 'tan') return Math.tan(arg);
+              if (fnName === 'abs') return Math.abs(arg);
+              if (fnName === 'sqrt') return arg < 0 ? NaN : Math.sqrt(arg);
+            }
+            if (tok.type === 'op' && tok.value === '(') {
+              consume();
+              const val = parseExpression();
+              if (!peek() || peek().value !== ')') return NaN;
+              consume();
+              return val;
+            }
+            return NaN;
+          }
+
+          const result = parseExpression();
+          return pos === tokens.length ? result : NaN;
+        } catch (e) {
+          return NaN;
+        }
+      }
+
+      /* =====================================================================
+         2. Web Audio API 合成音效引擎 (首次點擊解鎖，免外部音檔)
+         ===================================================================== */
+      let audioCtx = null;
+      let soundMuted = false;
+
+      function unlockAudio() {
+        try {
+          if (!audioCtx) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) audioCtx = new Ctx();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+        } catch (e) {}
+      }
+
+      function playTone(freq, type, duration, gainVal, endFreq) {
+        if (soundMuted) return;
+        unlockAudio();
+        if (!audioCtx) return;
+        try {
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type || 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          if (endFreq) {
+            osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+          }
+          gain.gain.setValueAtTime(gainVal || 0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + duration + 0.01);
+        } catch (e) {}
+      }
+
+      function playTick(val) {
+        playTone(440 + val * 22, 'sine', 0.06, 0.07, 560 + val * 22);
+      }
+
+      function playLaser() {
+        playTone(880, 'sawtooth', 0.35, 0.11, 210);
+      }
+
+      function playVictory() {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+          setTimeout(() => playTone(f, 'triangle', 0.35, 0.12), idx * 95);
+        });
+      }
+
+      function playBonk() {
+        playTone(190, 'square', 0.25, 0.09, 105);
+      }
+
+      /* =====================================================================
+         3. 關卡資料設計 (6 大主線關卡 + 自由實驗室)
+         ===================================================================== */
+      const PARAM_INFO = {
+        m: {
+          tag: 'm',
+          color: '#2563eb',
+          hint: (v) => v > 0 ? `m = +${v}：斜坡變陡往右上爬！` : v < 0 ? `m = ${v}：斜坡往右下溜滑梯！` : `m = 0：完全水平飛行！`
+        },
+        b: {
+          tag: 'b',
+          color: '#059669',
+          hint: (v) => v > 0 ? `b = +${v}：整條線往上搭電梯 ${v} 層！` : v < 0 ? `b = ${v}：整條線往下降落 ${Math.abs(v)} 層！` : `b = 0：剛好通過正中央原點 (0,0)`
+        },
+        a: {
+          tag: 'a',
+          color: '#9333ea',
+          hint: (v) => v > 0 ? `a = +${v}：開口朝上的開心笑臉 😄` : v < 0 ? `a = ${v}：開口朝下的彩虹弧線 🌈` : `a = 0：弧線拉平成直線了！`
+        },
+        h: {
+          tag: 'h',
+          color: '#ea580c',
+          hint: (v) => v > 0 ? `h = +${v}：頂點往右平移到 x = ${v}` : v < 0 ? `h = ${v}：頂點往左平移到 x = ${v}` : `h = 0：頂點在中央 x = 0`
+        },
+        k: {
+          tag: 'k',
+          color: '#db2777',
+          hint: (v) => v > 0 ? `k = +${v}：頂點往上提升到 y = ${v}` : v < 0 ? `k = ${v}：頂點往下降到 y = ${v}` : `k = 0：頂點高度在 y = 0`
+        }
+      };
+
+      const LEVELS = [
+        {
+          id: 1,
+          short: '第 1 關',
+          title: '直線小飛行 (y = x + b)',
+          intro: '調整截距 b，把斜線往上或往下移動，一次穿過 3 顆星星！',
+          params: [{ key: 'b', min: -6, max: 6, step: 0.5, init: -2 }],
+          stars: [{ x: -3, y: -1 }, { x: 0, y: 2 }, { x: 3, y: 5 }],
+          meteors: [],
+          evalY: (x, p) => x + p.b,
+          eqHtml: (p) => `y = x ${p.b >= 0 ? '+' : '-'} <span style="color:#34d399">${Math.abs(p.b)}</span>`,
+          eqPlain: (p) => `y = x ${p.b >= 0 ? '+' : '-'} ${Math.abs(p.b)}`,
+          latex: (p) => `y = x + (${p.b})`
+        },
+        {
+          id: 2,
+          short: '第 2 關',
+          title: '斜坡大挑戰 (y = mx)',
+          intro: '線固定通過原點 (0,0)，試著把斜率 m 調成負數往右下俯衝！',
+          params: [{ key: 'm', min: -4, max: 4, step: 0.5, init: 1 }],
+          stars: [{ x: -2, y: 4 }, { x: 1, y: -2 }, { x: 3, y: -6 }],
+          meteors: [],
+          evalY: (x, p) => p.m * x,
+          eqHtml: (p) => `y = <span style="color:#60a5fa">${p.m}</span>x`,
+          eqPlain: (p) => `y = ${p.m}x`,
+          latex: (p) => `y = ${p.m}x`
+        },
+        {
+          id: 3,
+          short: '第 3 關',
+          title: '閃避隕石線 (y = mx + b)',
+          intro: '同時調整斜率 m 與高度 b，收集 3 顆星星並繞開紅色隕石！',
+          params: [
+            { key: 'm', min: -3, max: 3, step: 0.5, init: 0 },
+            { key: 'b', min: -6, max: 6, step: 0.5, init: 0 }
+          ],
+          stars: [{ x: -4, y: -3 }, { x: 0, y: -1 }, { x: 4, y: 1 }],
+          meteors: [{ x: -1, y: 2 }, { x: 2, y: -2 }],
+          evalY: (x, p) => p.m * x + p.b,
+          eqHtml: (p) => `y = <span style="color:#60a5fa">${p.m}</span>x ${p.b >= 0 ? '+' : '-'} <span style="color:#34d399">${Math.abs(p.b)}</span>`,
+          eqPlain: (p) => `y = ${p.m}x ${p.b >= 0 ? '+' : '-'} ${Math.abs(p.b)}`,
+          latex: (p) => `y = ${p.m}x + (${p.b})`
+        },
+        {
+          id: 4,
+          short: '第 4 關',
+          title: '微笑拋物線 (y = ax² + k)',
+          intro: '調整開口大小 a 與上下位置 k，畫出穿過 3 顆星星的 U 型弧線！',
+          params: [
+            { key: 'a', min: -2, max: 2, step: 0.5, init: -0.5 },
+            { key: 'k', min: -6, max: 6, step: 1, init: 1 }
+          ],
+          stars: [{ x: -3, y: 1.5 }, { x: 0, y: -3 }, { x: 3, y: 1.5 }],
+          meteors: [{ x: 0, y: 1 }],
+          evalY: (x, p) => p.a * x * x + p.k,
+          eqHtml: (p) => `y = <span style="color:#c084fc">${p.a}</span>x² ${p.k >= 0 ? '+' : '-'} <span style="color:#f472b6">${Math.abs(p.k)}</span>`,
+          eqPlain: (p) => `y = ${p.a}x² ${p.k >= 0 ? '+' : '-'} ${Math.abs(p.k)}`,
+          latex: (p) => `y = ${p.a}x^2 + (${p.k})`
+        },
+        {
+          id: 5,
+          short: '第 5 關',
+          title: '拋物線大跳躍 y = a(x-h)² + k',
+          intro: '用 (h, k) 把拋物線頂點移到上方星星 (1, 5)，再讓 a 朝下彎曲！',
+          params: [
+            { key: 'a', min: -2, max: 2, step: 0.5, init: -0.5 },
+            { key: 'h', min: -5, max: 5, step: 1, init: -2 },
+            { key: 'k', min: -5, max: 6, step: 1, init: 1 }
+          ],
+          stars: [{ x: -3, y: -3 }, { x: 1, y: 5 }, { x: 5, y: -3 }],
+          meteors: [{ x: 1, y: 1 }],
+          evalY: (x, p) => p.a * Math.pow(x - p.h, 2) + p.k,
+          eqHtml: (p) => `y = <span style="color:#c084fc">${p.a}</span>(x ${p.h >= 0 ? '-' : '+'} <span style="color:#fb923c">${Math.abs(p.h)}</span>)² ${p.k >= 0 ? '+' : '-'} <span style="color:#f472b6">${Math.abs(p.k)}</span>`,
+          eqPlain: (p) => `y = ${p.a}(x ${p.h >= 0 ? '-' : '+'} ${Math.abs(p.h)})² ${p.k >= 0 ? '+' : '-'} ${Math.abs(p.k)}`,
+          latex: (p) => `y = ${p.a}(x - (${p.h}))^2 + (${p.k})`
+        },
+        {
+          id: 6,
+          short: '第 6 關',
+          title: '太空折線盾 y = a|x-h| + k',
+          intro: '絕對值函數像 V 字反彈！把尖角頂點 (h, k) 對準下方星星 (-1, -3)。',
+          params: [
+            { key: 'a', min: -2, max: 2, step: 0.5, init: 1 },
+            { key: 'h', min: -5, max: 5, step: 1, init: 2 },
+            { key: 'k', min: -5, max: 5, step: 1, init: 0 }
+          ],
+          stars: [{ x: -6, y: 2 }, { x: -1, y: -3 }, { x: 4, y: 2 }],
+          meteors: [{ x: -1, y: 1 }, { x: 2, y: -2 }],
+          evalY: (x, p) => p.a * Math.abs(x - p.h) + p.k,
+          eqHtml: (p) => `y = <span style="color:#c084fc">${p.a}</span>|x ${p.h >= 0 ? '-' : '+'} <span style="color:#fb923c">${Math.abs(p.h)}</span>| ${p.k >= 0 ? '+' : '-'} <span style="color:#f472b6">${Math.abs(p.k)}</span>`,
+          eqPlain: (p) => `y = ${p.a}|x ${p.h >= 0 ? '-' : '+'} ${Math.abs(p.h)}| ${p.k >= 0 ? '+' : '-'} ${Math.abs(p.k)}`,
+          latex: (p) => `y = ${p.a}\\left|x - (${p.h})\\right| + (${p.k})`
+        },
+        {
+          id: 7,
+          short: '自由實驗室',
+          title: '🧪 自由函數創造實驗室',
+          intro: '點選下方範例或輸入任意函數，自由探索波形變化！',
+          isFree: true,
+          params: [
+            { key: 'a', min: -4, max: 4, step: 0.5, init: 2 },
+            { key: 'b', min: -4, max: 4, step: 0.5, init: 1 },
+            { key: 'k', min: -5, max: 5, step: 0.5, init: 0 }
+          ],
+          stars: [],
+          meteors: [],
+          evalY: (x, p) => safeEvalMath(state.customExpr, { x, a: p.a, b: p.b, h: 0, k: p.k }),
+          eqHtml: () => `<span style="color:#fde047">y = ${escapeHtml(state.customExpr)}</span>`,
+          eqPlain: () => `y = ${state.customExpr}`,
+          latex: () => `y = ${state.customExpr}`
+        }
+      ];
+
+      /* =====================================================================
+         4. 遊戲狀態與座標引擎
+         ===================================================================== */
+      const state = {
+        levelIdx: 0,
+        params: {},
+        completedIds: new Set(),
+        customExpr: 'a * sin(b * x) + k',
+        shipPos: null,
+        animating: false,
+        animId: null,
+        desmosCalc: null,
+        desmosReady: false
+      };
+
+      const canvas = document.getElementById('graph-canvas');
+      const ctx = canvas.getContext('2d');
+      const graphStage = document.getElementById('graph-stage');
+
+      // 座標視野範圍 (Desmos 經典比例)
+      const VIEW = { xMin: -10, xMax: 10, yMin: -7, yMax: 7 };
+
+      function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, (m) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[m]));
+      }
+
+      /* =====================================================================
+         5. 即時碰撞與瞄準檢測 (半徑 < 0.45 單位判定命中)
+         ===================================================================== */
+      function evaluateTrajectory() {
+        const lvl = LEVELS[state.levelIdx];
+        if (lvl.isFree) {
+          return { isFree: true, starHits: [], hitMeteor: null, passed: false };
+        }
+
+        const starHits = new Array(lvl.stars.length).fill(false);
+        let hitMeteor = null;
+
+        for (let x = VIEW.xMin; x <= VIEW.xMax; x += 0.025) {
+          const y = lvl.evalY(x, state.params);
+          if (!Number.isFinite(y)) continue;
+
+          for (let i = 0; i < lvl.meteors.length; i++) {
+            const m = lvl.meteors[i];
+            if (Math.hypot(x - m.x, y - m.y) < 0.58) {
+              hitMeteor = m;
+            }
+          }
+
+          for (let j = 0; j < lvl.stars.length; j++) {
+            const s = lvl.stars[j];
+            if (Math.hypot(x - s.x, y - s.y) < 0.45) {
+              starHits[j] = true;
+            }
+          }
+        }
+
+        const hitCount = starHits.filter(Boolean).length;
+        const allStars = hitCount === lvl.stars.length;
+        return {
+          isFree: false,
+          starHits,
+          hitCount,
+          totalStars: lvl.stars.length,
+          hitMeteor,
+          passed: !hitMeteor && allStars
+        };
+      }
+
+      /* =====================================================================
+         6. 高解析度 Desmos 風格座標繪製引擎 (支援 devicePixelRatio & ResizeObserver)
+         ===================================================================== */
+      function resizeGraphCanvas() {
+        const rect = graphStage.getBoundingClientRect();
+        const w = Math.max(200, Math.floor(rect.width));
+        const h = Math.max(200, Math.floor(rect.height));
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+          canvas.width = w * dpr;
+          canvas.height = h * dpr;
+        }
+        renderGraph();
+      }
+
+      function renderGraph() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        if (w <= 0 || h <= 0) return;
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+
+        // 1. 純白 Desmos 畫布底色
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+
+        // 保持正方格比例 (以 X 軸 -10..10 為基準自動計算 Y 軸可視範圍)
+        const pxPerUnit = w / (VIEW.xMax - VIEW.xMin);
+        const halfYUnits = (h / pxPerUnit) / 2;
+        VIEW.yMin = -halfYUnits;
+        VIEW.yMax = halfYUnits;
+
+        const toPxX = (x) => (x - VIEW.xMin) * pxPerUnit;
+        const toPxY = (y) => h / 2 - y * pxPerUnit;
+
+        // 2. 次格線 (0.5 單位，極淡灰)
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = Math.ceil(VIEW.xMin * 2) / 2; x <= VIEW.xMax; x += 0.5) {
+          const px = Math.round(toPxX(x)) + 0.5;
+          ctx.moveTo(px, 0);
+          ctx.lineTo(px, h);
+        }
+        for (let y = Math.ceil(VIEW.yMin * 2) / 2; y <= VIEW.yMax; y += 0.5) {
+          const py = Math.round(toPxY(y)) + 0.5;
+          ctx.moveTo(0, py);
+          ctx.lineTo(w, py);
+        }
+        ctx.stroke();
+
+        // 3. 主格線 (1 單位，Desmos 經典淺灰格線)
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = Math.ceil(VIEW.xMin); x <= Math.floor(VIEW.xMax); x++) {
+          if (x === 0) continue;
+          const px = Math.round(toPxX(x)) + 0.5;
+          ctx.moveTo(px, 0);
+          ctx.lineTo(px, h);
+        }
+        for (let y = Math.ceil(VIEW.yMin); y <= Math.floor(VIEW.yMax); y++) {
+          if (y === 0) continue;
+          const py = Math.round(toPxY(y)) + 0.5;
+          ctx.moveTo(0, py);
+          ctx.lineTo(w, py);
+        }
+        ctx.stroke();
+
+        // 4. 主 X / Y 座標軸與箭頭
+        const originX = toPxX(0);
+        const originY = toPxY(0);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, originY);
+        ctx.lineTo(w, originY);
+        ctx.moveTo(originX, 0);
+        ctx.lineTo(originX, h);
+        ctx.stroke();
+
+        // 5. 刻度數字
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let x = Math.ceil(VIEW.xMin) + 1; x <= Math.floor(VIEW.xMax) - 1; x++) {
+          if (x === 0) continue;
+          ctx.fillText(String(x), toPxX(x), originY + 5);
+        }
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let y = Math.ceil(VIEW.yMin) + 1; y <= Math.floor(VIEW.yMax) - 1; y++) {
+          if (y === 0) continue;
+          ctx.fillText(String(y), originX - 6, toPxY(y));
+        }
+        ctx.fillText('0', originX - 6, originY + 11);
+
+        const lvl = LEVELS[state.levelIdx];
+        const evalRes = evaluateTrajectory();
+
+        // 6. 繪製玩家函數雷射軌道 (全中且安全時亮起翡翠綠光暈)
+        ctx.save();
+        ctx.strokeStyle = evalRes.passed ? '#10b981' : (evalRes.hitMeteor ? '#ef4444' : '#4f46e5');
+        ctx.lineWidth = evalRes.passed ? 5 : 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = evalRes.passed ? 'rgba(16, 185, 129, 0.45)' : 'rgba(79, 70, 229, 0.3)';
+        ctx.shadowBlur = 8;
+
+        ctx.beginPath();
+        let penDown = false;
+        const stepX = (VIEW.xMax - VIEW.xMin) / 420;
+        for (let x = VIEW.xMin; x <= VIEW.xMax; x += stepX) {
+          const y = lvl.evalY(x, state.params);
+          if (Number.isFinite(y) && y >= VIEW.yMin - 4 && y <= VIEW.yMax + 4) {
+            const px = toPxX(x);
+            const py = toPxY(y);
+            if (!penDown) {
+              ctx.moveTo(px, py);
+              penDown = true;
+            } else {
+              ctx.lineTo(px, py);
+            }
+          } else {
+            penDown = false;
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // 7. 繪製紅色隕石警戒圈
+        lvl.meteors.forEach((m) => {
+          const px = toPxX(m.x);
+          const py = toPxY(m.y);
+          const rPx = 0.58 * pxPerUnit;
+          const isColliding = evalRes.hitMeteor === m;
+
+          ctx.save();
+          ctx.fillStyle = isColliding ? 'rgba(239, 68, 68, 0.36)' : 'rgba(239, 68, 68, 0.16)';
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = isColliding ? 2.5 : 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(px, py, rPx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 隕石本體
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.arc(px, py, 9, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('✕', px, py);
+          ctx.restore();
+        });
+
+        // 8. 繪製宇宙星星目標 (命中時亮起翡翠綠發光環！)
+        lvl.stars.forEach((s, idx) => {
+          const px = toPxX(s.x);
+          const py = toPxY(s.y);
+          const isLit = evalRes.starHits[idx];
+          const rPx = (isLit ? 0.62 : 0.45) * pxPerUnit;
+
+          ctx.save();
+          ctx.fillStyle = isLit ? 'rgba(16, 185, 129, 0.32)' : 'rgba(245, 158, 11, 0.18)';
+          ctx.strokeStyle = isLit ? '#10b981' : '#f59e0b';
+          ctx.lineWidth = isLit ? 2.5 : 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, rPx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 五角星圖形
+          drawStarShape(ctx, px, py, 5, isLit ? 12 : 10, isLit ? 5.5 : 4.5, isLit ? '#10b981' : '#f59e0b', '#ffffff');
+
+          // 座標標籤
+          ctx.fillStyle = isLit ? '#065f46' : '#92400e';
+          ctx.font = 'bold 11px ui-monospace, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`(${s.x},${s.y})`, px, py - rPx - 2);
+          ctx.restore();
+        });
+
+        // 9. 繪製飛船發射雷射光點
+        if (state.shipPos && Number.isFinite(state.shipPos.y)) {
+          const sx = toPxX(state.shipPos.x);
+          const sy = toPxY(state.shipPos.y);
+          ctx.save();
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#0284c7';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.font = '18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🚀', sx, sy - 16);
+          ctx.restore();
+        }
+
+        ctx.restore();
+        syncOfficialDesmosIfLoaded();
+      }
+
+      function drawStarShape(c, cx, cy, spikes, outerR, innerR, fill, stroke) {
+        let rot = (Math.PI / 2) * 3;
+        let step = Math.PI / spikes;
+        c.beginPath();
+        c.moveTo(cx, cy - outerR);
+        for (let i = 0; i < spikes; i++) {
+          c.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+          rot += step;
+          c.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+          rot += step;
+        }
+        c.closePath();
+        c.fillStyle = fill;
+        c.fill();
+        c.lineWidth = 1.5;
+        c.strokeStyle = stroke;
+        c.stroke();
+      }
+
+      /* =====================================================================
+         7. 非同步選用 Desmos API 同步 (絕不阻斷主畫面渲染)
+         ===================================================================== */
+      function initAsyncDesmos() {
+        try {
+          const script = document.createElement('script');
+          script.src = 'https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6';
+          script.async = true;
+          script.onload = function () {
+            if (window.Desmos && window.Desmos.GraphingCalculator) {
+              const container = document.getElementById('desmos-container');
+              container.style.display = 'block';
+              state.desmosCalc = window.Desmos.GraphingCalculator(container, {
+                expressions: false,
+                settingsMenu: false,
+                zoomButtons: false,
+                expressionsTopbar: false,
+                keypad: false,
+                border: false
+              });
+              state.desmosCalc.setMathBounds({ left: -10, right: 10, bottom: -7, top: 7 });
+              state.desmosReady = true;
+              syncOfficialDesmosIfLoaded();
+            }
+          };
+          document.body.appendChild(script);
+        } catch (e) {}
+      }
+
+      function syncOfficialDesmosIfLoaded() {
+        if (!state.desmosReady || !state.desmosCalc) return;
+        try {
+          const lvl = LEVELS[state.levelIdx];
+          const evalRes = evaluateTrajectory();
+          const exprs = [
+            { id: 'curve', latex: lvl.latex(state.params), color: evalRes.passed ? '#10b981' : '#4f46e5', lineWidth: 4 }
+          ];
+          if (lvl.isFree) {
+            ['a', 'b', 'k'].forEach((k) => {
+              exprs.push({ id: `p-${k}`, latex: `${k} = ${state.params[k] ?? 0}` });
+            });
+          }
+          lvl.stars.forEach((s, idx) => {
+            exprs.push({
+              id: `star-${idx}`,
+              latex: `(${s.x}, ${s.y})`,
+              color: evalRes.starHits[idx] ? '#10b981' : '#f59e0b',
+              pointSize: evalRes.starHits[idx] ? 20 : 15,
+              label: `(${s.x},${s.y})`,
+              showLabel: true
+            });
+          });
+          lvl.meteors.forEach((m, idx) => {
+            exprs.push({
+              id: `meteor-${idx}`,
+              latex: `(${m.x}, ${m.y})`,
+              color: '#ef4444',
+              pointSize: 16,
+              label: '☄️',
+              showLabel: true
+            });
+          });
+          if (state.shipPos) {
+            exprs.push({
+              id: 'ship',
+              latex: `(${state.shipPos.x}, ${state.shipPos.y})`,
+              color: '#0284c7',
+              pointSize: 18,
+              label: '🚀',
+              showLabel: true
+            });
+          }
+          state.desmosCalc.setExpressions(exprs);
+        } catch (e) {}
+      }
+
+      /* =====================================================================
+         8. UI 互動更新、滑桿生成與關卡切換
+         ===================================================================== */
+      function updateHUDAndHint(customHintText, hintMode) {
+        const lvl = LEVELS[state.levelIdx];
+        document.getElementById('hud-level-name').textContent = lvl.short;
+        document.getElementById('hud-equation').innerHTML = lvl.eqHtml(state.params);
+        document.getElementById('deck-title').textContent = `${lvl.short}：${lvl.title}`;
+
+        // 總星數統計
+        let earned = 0;
+        let maxTotal = 0;
+        LEVELS.forEach((l) => {
+          maxTotal += l.stars.length;
+          if (state.completedIds.has(l.id)) earned += l.stars.length;
+        });
+        document.getElementById('total-stars-label').textContent = earned;
+        document.getElementById('max-stars-label').textContent = maxTotal;
+
+        // 當前關卡瞄準星數
+        const evalRes = evaluateTrajectory();
+        const starBadge = document.getElementById('hud-star-badge');
+        const starCountEl = document.getElementById('hud-star-count');
+        if (lvl.isFree) {
+          starCountEl.textContent = '自由模式';
+          starBadge.classList.remove('all-lit');
+        } else {
+          starCountEl.textContent = `${evalRes.hitCount}/${evalRes.totalStars}`;
+          if (evalRes.passed) {
+            starBadge.classList.add('all-lit');
+          } else {
+            starBadge.classList.remove('all-lit');
+          }
+        }
+
+        // 提示橫幅狀態
+        const banner = document.getElementById('hint-banner');
+        const hintText = document.getElementById('hint-text');
+        const hintIcon = document.getElementById('hint-icon');
+        banner.className = 'hint-banner';
+
+        if (customHintText) {
+          hintText.textContent = customHintText;
+          if (hintMode === 'danger') {
+            banner.classList.add('danger');
+            hintIcon.textContent = '⚠️';
+          } else if (hintMode === 'ready') {
+            banner.classList.add('ready');
+            hintIcon.textContent = '✨';
+          } else {
+            hintIcon.textContent = '💡';
+          }
+        } else if (!lvl.isFree && evalRes.hitMeteor) {
+          banner.classList.add('danger');
+          hintIcon.textContent = '☄️';
+          hintText.textContent = '小心！雷射線碰到紅色隕石了，再微調參數繞開它！';
+        } else if (!lvl.isFree && evalRes.passed) {
+          banner.classList.add('ready');
+          hintIcon.textContent = '🎯';
+          hintText.textContent = '太棒了！全部星星都亮綠燈了，快按「🚀 發射雷射！」';
+        } else {
+          hintIcon.textContent = '💡';
+          hintText.textContent = lvl.intro;
+        }
+      }
+
+      function renderSliders() {
+        const list = document.getElementById('sliders-list');
+        list.innerHTML = '';
+        const lvl = LEVELS[state.levelIdx];
+
+        lvl.params.forEach((pCfg) => {
+          const info = PARAM_INFO[pCfg.key];
+          const val = state.params[pCfg.key];
+
+          const card = document.createElement('div');
+          card.className = 'slider-card';
+
+          const tag = document.createElement('div');
+          tag.className = 'param-tag';
+          tag.innerHTML = `
+            <span class="param-letter" style="background:${info.color}">${info.tag}</span>
+            <span class="param-val" id="val-${pCfg.key}">${val > 0 ? '+' + val : val}</span>
+          `;
+
+          const minusBtn = document.createElement('button');
+          minusBtn.type = 'button';
+          minusBtn.className = 'step-btn';
+          minusBtn.textContent = '−';
+          minusBtn.setAttribute('aria-label', `減少 ${pCfg.key}`);
+          minusBtn.addEventListener('click', () => adjustParam(pCfg.key, -pCfg.step));
+
+          const range = document.createElement('input');
+          range.type = 'range';
+          range.className = 'param-range';
+          range.id = `range-${pCfg.key}`;
+          range.style.setProperty('--accent', info.color);
+          range.min = pCfg.min;
+          range.max = pCfg.max;
+          range.step = pCfg.step;
+          range.value = val;
+
+          const handleRangeChange = (e) => {
+            const next = parseFloat(e.target.value);
+            state.params[pCfg.key] = next;
+            document.getElementById(`val-${pCfg.key}`).textContent = next > 0 ? `+${next}` : `${next}`;
+            playTick(next);
+            updateHUDAndHint(info.hint(next));
+            renderGraph();
+          };
+          range.addEventListener('input', handleRangeChange);
+          range.addEventListener('change', handleRangeChange);
+
+          const plusBtn = document.createElement('button');
+          plusBtn.type = 'button';
+          plusBtn.className = 'step-btn';
+          plusBtn.textContent = '+';
+          plusBtn.setAttribute('aria-label', `增加 ${pCfg.key}`);
+          plusBtn.addEventListener('click', () => adjustParam(pCfg.key, pCfg.step));
+
+          card.appendChild(tag);
+          card.appendChild(minusBtn);
+          card.appendChild(range);
+          card.appendChild(plusBtn);
+          list.appendChild(card);
+        });
+      }
+
+      function adjustParam(key, delta) {
+        const lvl = LEVELS[state.levelIdx];
+        const cfg = lvl.params.find((p) => p.key === key);
+        if (!cfg) return;
+        let next = Math.round((state.params[key] + delta) * 10) / 10;
+        next = Math.max(cfg.min, Math.min(cfg.max, next));
+        state.params[key] = next;
+
+        const rangeEl = document.getElementById(`range-${key}`);
+        if (rangeEl) rangeEl.value = next;
+        const valEl = document.getElementById(`val-${key}`);
+        if (valEl) valEl.textContent = next > 0 ? `+${next}` : `${next}`;
+
+        playTick(next);
+        updateHUDAndHint(PARAM_INFO[key].hint(next));
+        renderGraph();
+      }
+
+      function loadLevel(idx) {
+        stopAnimation();
+        state.levelIdx = idx;
+        const lvl = LEVELS[idx];
+        state.params = {};
+        lvl.params.forEach((p) => {
+          state.params[p.key] = p.init;
+        });
+
+        document.getElementById('legend-meteor-wrap').style.display = lvl.meteors.length > 0 ? 'inline-flex' : 'none';
+        const freeBar = document.getElementById('free-lab-bar');
+        const launchBtn = document.getElementById('btn-launch');
+        if (lvl.isFree) {
+          freeBar.classList.add('active');
+          launchBtn.textContent = '🛸 試飛巡航！';
+        } else {
+          freeBar.classList.remove('active');
+          launchBtn.textContent = '🚀 發射雷射！';
+        }
+
+        renderSliders();
+        updateHUDAndHint();
+        renderGraph();
+      }
+
+      /* =====================================================================
+         9. 發射雷射動畫與過關彩帶特效
+         ===================================================================== */
+      function stopAnimation() {
+        if (state.animId) {
+          cancelAnimationFrame(state.animId);
+          state.animId = null;
+        }
+        state.animating = false;
+        state.shipPos = null;
+      }
+
+      function launchLaser() {
+        if (state.animating) return;
+        playLaser();
+        state.animating = true;
+
+        const lvl = LEVELS[state.levelIdx];
+        const evalRes = evaluateTrajectory();
+        updateHUDAndHint('🚀 太空船沿著函數軌道高速飛行中...', 'info');
+
+        let curX = -9.5;
+        const endX = 9.5;
+        const speed = 0.42;
+
+        function step() {
+          const curY = lvl.evalY(curX, state.params);
+          state.shipPos = { x: Number(curX.toFixed(2)), y: Number(curY.toFixed(2)) };
+          renderGraph();
+
+          if (!evalRes.isFree && evalRes.hitMeteor && curX >= evalRes.hitMeteor.x) {
+            stopAnimation();
+            renderGraph();
+            playBonk();
+            updateHUDAndHint('💥 哎呀！飛船撞到紅色隕石了，再調整參數繞開它吧！', 'danger');
+            return;
+          }
+
+          curX += speed;
+          if (curX <= endX) {
+            state.animId = requestAnimationFrame(step);
+          } else {
+            stopAnimation();
+            renderGraph();
+            finishLaunch(evalRes);
+          }
+        }
+
+        state.animId = requestAnimationFrame(step);
+      }
+
+      function finishLaunch(evalRes) {
+        const lvl = LEVELS[state.levelIdx];
+        if (evalRes.isFree) {
+          playVictory();
+          updateHUDAndHint('✨ 巡航完成！試著修改上方公式或滑桿創造新圖形！', 'ready');
+          return;
+        }
+
+        if (evalRes.passed) {
+          playVictory();
+          triggerConfetti();
+          state.completedIds.add(lvl.id);
+          updateHUDAndHint(`🎉 恭喜通過${lvl.short}！成功收集全部星星！`, 'ready');
+
+          document.getElementById('victory-title').textContent = `${lvl.short} 通關成功！`;
+          document.getElementById('victory-msg').textContent = `太厲害了！你用函數精準收集了全部 ${evalRes.totalStars} 顆星星！`;
+          document.getElementById('victory-eq').textContent = lvl.eqPlain(state.params);
+          const nextBtn = document.getElementById('btn-next-level');
+          nextBtn.style.display = state.levelIdx < LEVELS.length - 1 ? 'inline-flex' : 'none';
+          document.getElementById('victory-modal').classList.add('open');
+        } else {
+          playBonk();
+          updateHUDAndHint(`⭐ 目前命中 ${evalRes.hitCount}/${evalRes.totalStars} 顆星星，再調整一下參數！`, 'danger');
+        }
+      }
+
+      // 彩帶動畫
+      const confettiCanvas = document.getElementById('confetti-canvas');
+      const cCtx = confettiCanvas.getContext('2d');
+      let confettiList = [];
+      let confettiTimer = null;
+
+      function triggerConfetti() {
+        confettiCanvas.width = window.innerWidth;
+        confettiCanvas.height = window.innerHeight;
+        const colors = ['#facc15', '#38bdf8', '#a855f7', '#fb7185', '#10b981', '#fb923c'];
+        confettiList = Array.from({ length: 95 }, () => ({
+          x: Math.random() * confettiCanvas.width,
+          y: -20 - Math.random() * 180,
+          w: 8 + Math.random() * 7,
+          h: 5 + Math.random() * 5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 4,
+          vy: 3 + Math.random() * 4.5,
+          rot: Math.random() * 360,
+          vRot: (Math.random() - 0.5) * 10
+        }));
+
+        if (confettiTimer) cancelAnimationFrame(confettiTimer);
+        function loop() {
+          cCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+          let alive = 0;
+          confettiList.forEach((p) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.vRot;
+            if (p.y < confettiCanvas.height + 20) {
+              alive++;
+              cCtx.save();
+              cCtx.translate(p.x, p.y);
+              cCtx.rotate((p.rot * Math.PI) / 180);
+              cCtx.fillStyle = p.color;
+              cCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+              cCtx.restore();
+            }
+          });
+          if (alive > 0) {
+            confettiTimer = requestAnimationFrame(loop);
+          } else {
+            cCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+          }
+        }
+        confettiTimer = requestAnimationFrame(loop);
+      }
+
+      /* =====================================================================
+         10. 關卡選單與所有按鈕事件綁定
+         ===================================================================== */
+      function openLevelsModal() {
+        playTick(560);
+        const container = document.getElementById('levels-list-container');
+        container.innerHTML = '';
+        LEVELS.forEach((lvl, idx) => {
+          const isCur = idx === state.levelIdx;
+          const isDone = state.completedIds.has(lvl.id);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `level-item-btn ${isCur ? 'current' : isDone ? 'done' : ''}`;
+          btn.innerHTML = `
+            <div>
+              <div style="font-size: 13px; font-weight: 900; color: #0f172a;">${lvl.short}：${lvl.title}</div>
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${lvl.intro}</div>
+            </div>
+            <span style="font-size: 18px;">${isDone ? '✅' : isCur ? '🚀' : '➡️'}</span>
+          `;
+          btn.addEventListener('click', () => {
+            document.getElementById('levels-modal').classList.remove('open');
+            loadLevel(idx);
+          });
+          container.appendChild(btn);
+        });
+        document.getElementById('levels-modal').classList.add('open');
+      }
+
+      function bindEvents() {
+        document.getElementById('btn-open-levels').addEventListener('click', openLevelsModal);
+        document.getElementById('btn-bottom-levels').addEventListener('click', openLevelsModal);
+        document.getElementById('btn-close-levels').addEventListener('click', () => {
+          document.getElementById('levels-modal').classList.remove('open');
+        });
+
+        document.getElementById('btn-toggle-sound').addEventListener('click', () => {
+          soundMuted = !soundMuted;
+          document.getElementById('btn-toggle-sound').textContent = soundMuted ? '🔇' : '🔊';
+          if (!soundMuted) playTick(600);
+        });
+
+        document.getElementById('btn-reset-params').addEventListener('click', () => {
+          playTick(420);
+          loadLevel(state.levelIdx);
+        });
+
+        document.getElementById('btn-launch').addEventListener('click', launchLaser);
+
+        document.getElementById('btn-stay-level').addEventListener('click', () => {
+          document.getElementById('victory-modal').classList.remove('open');
+        });
+
+        document.getElementById('btn-next-level').addEventListener('click', () => {
+          document.getElementById('victory-modal').classList.remove('open');
+          if (state.levelIdx < LEVELS.length - 1) {
+            loadLevel(state.levelIdx + 1);
+          }
+        });
+
+        // 自由實驗室公式套用與預設按鈕
+        document.getElementById('btn-apply-formula').addEventListener('click', () => {
+          const val = document.getElementById('custom-formula-input').value.trim();
+          if (val) {
+            state.customExpr = val;
+            playTick(620);
+            updateHUDAndHint('已更新自訂函數！拉動 a、b、k 滑桿觀察變化！');
+            renderGraph();
+          }
+        });
+
+        document.getElementById('preset-chips').addEventListener('click', (e) => {
+          const chip = e.target.closest('.preset-chip');
+          if (!chip) return;
+          const expr = chip.getAttribute('data-expr');
+          document.getElementById('custom-formula-input').value = expr;
+          state.customExpr = expr;
+          playTick(620);
+          updateHUDAndHint(`已切換範例：y = ${expr}`);
+          renderGraph();
+        });
+
+        // 監聽視窗與容器尺寸變化，確保永遠不會 0px 塌陷
+        window.addEventListener('resize', resizeGraphCanvas);
+        if (window.ResizeObserver) {
+          const ro = new ResizeObserver(() => resizeGraphCanvas());
+          ro.observe(graphStage);
+        }
+      }
+
+      /* =====================================================================
+         11. 啟動初始化
+         ===================================================================== */
+      function bootstrap() {
+        bindEvents();
+        loadLevel(0);
+        resizeGraphCanvas();
+        initAsyncDesmos();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootstrap);
+      } else {
+        bootstrap();
+      }
+    })();
+  </script>
+</body>
+</html>

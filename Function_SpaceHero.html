@@ -724,16 +724,15 @@
         try {
           if (!exprStr || typeof exprStr !== 'string') return NaN;
           let s = exprStr.trim().toLowerCase();
-          if (s.startsWith('y=')) s = s.slice(2).trim();
-          else if (s.startsWith('y =')) s = s.slice(3).trim();
+          s = s.replace(/^y\s*=\s*/i, '');
 
-          // 補齊隱含乘法，例如 2x -> 2*x, ax -> a*x, 2sin(x) -> 2*sin(x), )x -> )*x
+          // 補齊隱含乘法，例如 2x -> 2*x, ax -> a*x, 2sin(x) -> 2*sin(x), abx -> a*b*x
           s = s
+            .replace(/·/g, '*')
             .replace(/(\d)([a-z(])/g, '$1*$2')
             .replace(/([a-z)])(\d)/g, '$1*$2')
             .replace(/\)\s*\(/g, ')*(')
-            .replace(/\b([abhkx])\s*([abhkx])\b/g, '$1*$2')
-            .replace(/\b([abhkx])\s*\(/g, '$1*(');
+            .replace(/([abhkx])(?=[abhkx(])/g, '$1*');
 
           // 詞法分析 (Tokenizer)
           const tokens = [];
@@ -920,6 +919,15 @@
       /* =====================================================================
          3. 關卡資料設計 (6 大主線關卡 + 自由實驗室)
          ===================================================================== */
+      function toDesmosLatex(expr) {
+        let s = String(expr || '').trim();
+        s = s.replace(/^y\s*=\s*/i, '');
+        s = s.replace(/[*·]/g, ' \\cdot ');
+        s = s.replace(/\b(sin|cos|tan|sqrt)\b/gi, (_, fn) => `\\${fn.toLowerCase()}`);
+        s = s.replace(/\babs\s*\(/gi, '\\operatorname{abs}(');
+        return `y = ${s}`;
+      }
+
       const PARAM_INFO = {
         m: {
           tag: 'm',
@@ -1055,9 +1063,9 @@
           stars: [],
           meteors: [],
           evalY: (x, p) => safeEvalMath(state.customExpr, { x, a: p.a, b: p.b, h: 0, k: p.k }),
-          eqHtml: () => `<span style="color:#fde047">y = ${escapeHtml(state.customExpr)}</span>`,
-          eqPlain: () => `y = ${state.customExpr}`,
-          latex: () => `y = ${state.customExpr}`
+          eqHtml: () => `<span style="color:#fde047">y = ${escapeHtml(state.customExpr.replace(/^y\s*=\s*/i, ''))}</span>`,
+          eqPlain: () => `y = ${state.customExpr.replace(/^y\s*=\s*/i, '')}`,
+          latex: () => toDesmosLatex(state.customExpr)
         }
       ];
 

@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>幾何空間建築師 Geometry Space Architect</title>
+  <style>
+    /* =====================================================================
+       1. 基礎重置與單屏雙區響應式版面 (零外部依賴、100% 視窗防塌陷)
+       ===================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg-navy: #0b1120;
+      --bg-panel: #111827;
+      --bg-card: #1e293b;
+      --cyan: #38bdf8;
+      --cyan-bright: #22d3ee;
+      --amber: #fbbf24;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --purple: #c084fc;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --border: rgba(148, 163, 184, 0.22);
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      background: var(--bg-navy);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      overflow: hidden;
+      user-select: none;
+      overscroll-behavior: none;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    @media (min-width: 820px) {
+      .app-shell {
+        flex-direction: row;
+      }
+    }
+
+    /* =====================================================================
+       2. 上半部 (54%)：星際建築藍圖座標畫布區
+       ===================================================================== */
+    .blueprint-stage {
+      position: relative;
+      flex: 1 1 54%;
+      min-height: 240px;
+      width: 100%;
+      background: radial-gradient(circle at 50% 45%, #131f3a 0%, #0b1120 100%);
+      border-bottom: 2px solid rgba(56, 189, 248, 0.35);
+      overflow: hidden;
+    }
+
+    @media (min-width: 820px) {
+      .blueprint-stage {
+        flex: 1 1 58%;
+        height: 100%;
+        border-bottom: none;
+        border-right: 2px solid rgba(56, 189, 248, 0.35);
+      }
+    }
+
+    #geo-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* 頂部浮動關卡切換列 */
+    .top-nav {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .level-tabs {
+      pointer-events: auto;
+      display: flex;
+      gap: 4px;
+      background: rgba(11, 17, 32, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      max-width: calc(100% - 44px);
+    }
+
+    .level-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-sub);
+      padding: 5px 9px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .level-tab.active {
+      background: var(--cyan);
+      color: #081226;
+      box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+    }
+
+    .level-tab.solved::after {
+      content: " ✓";
+      color: #059669;
+      font-weight: 900;
+    }
+
+    .level-tab:not(.active).solved {
+      color: var(--emerald);
+    }
+
+    .sound-btn {
+      pointer-events: auto;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(11, 17, 32, 0.85);
+      color: var(--text-main);
+      font-size: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* 畫布底部即時數學公式計算卡 */
+    .formula-hud {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      background: rgba(11, 17, 32, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      font-size: 12.5px;
+      pointer-events: none;
+    }
+
+    .formula-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 700;
+      color: var(--cyan-bright);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-pill {
+      flex-shrink: 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 800;
+      background: rgba(251, 191, 36, 0.16);
+      color: var(--amber);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+    }
+
+    .status-pill.ready {
+      background: rgba(52, 211, 153, 0.2);
+      color: var(--emerald);
+      border-color: rgba(52, 211, 153, 0.5);
+    }
+
+    /* =====================================================================
+       3. 下半部 (46%)：拇指控制面板 (滑桿 + 微調鈕 + 驗證建築)
+       ===================================================================== */
+    .control-deck {
+      flex: 0 0 46%;
+      max-height: 46%;
+      width: 100%;
+      background: var(--bg-panel);
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 7px;
+      overflow-y: auto;
+    }
+
+    @media (min-width: 820px) {
+      .control-deck {
+        flex: 0 0 42%;
+        max-height: 100%;
+        height: 100%;
+        padding: 16px;
+        gap: 12px;
+      }
+    }
+
+    .mission-box {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .mission-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mission-title {
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 900;
+      color: var(--text-main);
+    }
+
+    .grade-badge {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(192, 132, 252, 0.18);
+      color: var(--purple);
+      border: 1px solid rgba(192, 132, 252, 0.4);
+    }
+
+    .mission-desc {
+      margin: 0;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.35;
+    }
+
+    /* 滑桿群組 */
+    .sliders-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider-row-card {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 5px 9px;
+    }
+
+    .param-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 78px;
+      flex-shrink: 0;
+    }
+
+    .param-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-sub);
+    }
+
+    .param-val {
+      font-family: ui-monospace, monospace;
+      font-size: 13.5px;
+      font-weight: 900;
+      color: var(--p-color, var(--cyan));
+    }
+
+    .nudge-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      font-size: 17px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .nudge-btn:active {
+      background: rgba(56, 189, 248, 0.25);
+      transform: scale(0.92);
+    }
+
+    input[type="range"].geo-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      min-width: 0;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      outline: none;
+    }
+
+    input[type="range"].geo-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--p-color, var(--cyan));
+      border: 2.5px solid #0b1120;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    input[type="range"].geo-slider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--p-color, var(--cyan));
+      border: 2.5px solid #0b1120;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    /* 底部操作與回饋橫幅 */
+    .feedback-strip {
+      min-height: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .feedback-strip.success {
+      color: var(--emerald);
+    }
+
+    .feedback-strip.error {
+      color: var(--rose);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-reset {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .btn-verify {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #38bdf8 0%, #34d399 100%);
+      color: #061224;
+      font-size: 14.5px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
+      transition: transform 0.12s ease;
+    }
+
+    .btn-verify:active {
+      transform: scale(0.97);
+    }
+
+    /* 過關慶祝橫幅疊層 */
+    .victory-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(8, 13, 26, 0.78);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .victory-overlay.open {
+      display: flex;
+    }
+
+    .victory-modal {
+      width: 100%;
+      max-width: 390px;
+      background: #131c31;
+      border: 2px solid var(--emerald);
+      border-radius: 22px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55);
+    }
+
+    .victory-modal h2 {
+      margin: 6px 0 8px;
+      font-size: 20px;
+      color: var(--emerald);
+    }
+
+    .victory-summary {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      margin: 12px 0 16px;
+      font-size: 13px;
+      color: #e2e8f0;
+      line-height: 1.5;
+    }
+
+    #fx-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fx-canvas"></canvas>
+
+  <div class="app-shell">
+    <!-- ===================================================================
+         上半部：星際建築藍圖座標畫布 (固定視野 x:[-7,7], y:[-5,5])
+         =================================================================== -->
+    <section class="blueprint-stage" id="blueprint-stage">
+      <canvas id="geo-canvas"></canvas>
+
+      <div class="top-nav">
+        <div class="level-tabs" id="level-tabs"></div>
+        <button type="button" class="sound-btn" id="btn-sound" title="音效開關">🔊</button>
+      </div>
+
+      <div class="formula-hud">
+        <div class="formula-text" id="formula-display">面積 = 4 × 3 ÷ 2 = 6</div>
+        <div class="status-pill" id="goal-pill">目標：面積 10 + 碰星星</div>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         下半部：拇指控制面板
+         =================================================================== -->
+    <section class="control-deck">
+      <div class="mission-box">
+        <div class="mission-header">
+          <h1 class="mission-title" id="mission-title">第 1 關：等底等高變形術</h1>
+          <span class="grade-badge" id="grade-badge">五年級幾何</span>
+        </div>
+        <p class="mission-desc" id="mission-desc">
+          底邊固定長 4，調整「高 h」讓面積等於 10，再左右推「偏移 s」碰觸星星 (3, 3)！
+        </p>
+      </div>
+
+      <div class="sliders-wrap" id="sliders-wrap"></div>
+
+      <div>
+        <div class="feedback-strip" id="feedback-strip">💡 提示：左右推動頂點 s 時，觀察面積是否改變！</div>
+        <div class="btn-group" style="margin-top: 6px;">
+          <button type="button" class="btn-reset" id="btn-reset">↺ 重置</button>
+          <button type="button" class="btn-verify" id="btn-verify">✨ 驗證建築</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 過關慶祝視窗 -->
+  <div class="victory-overlay" id="victory-overlay">
+    <div class="victory-modal">
+      <div style="font-size: 44px;">🏗️✨</div>
+      <h2 id="vic-title">建築藍圖驗證成功！</h2>
+      <div class="victory-summary" id="vic-summary"></div>
+      <div class="btn-group">
+        <button type="button" class="btn-reset" id="btn-vic-stay" style="flex: 1;">繼續實驗</button>
+        <button type="button" class="btn-verify" id="btn-vic-next" style="flex: 1.4;">下一關任務 ➡️</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* =====================================================================
+         1. Web Audio 合成音效引擎 (免外部音檔)
+         ===================================================================== */
+      let audioCtx = null;
+      let muted = false;
+
+      function playTone(freq, type, dur, vol, endFreq) {
+        if (muted) return;
+        try {
+          if (!audioCtx) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) audioCtx = new Ctx();
+          }
+          if (!audioCtx) return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type || 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + dur);
+
+          gain.gain.setValueAtTime(vol || 0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + dur + 0.01);
+        } catch (e) {}
+      }
+
+      function sfxTick(v) {
+        playTone(460 + v * 25, 'sine', 0.05, 0.05, 540 + v * 25);
+      }
+
+      function sfxWin() {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+          setTimeout(() => playTone(f, 'triangle', 0.32, 0.1), idx * 90);
+        });
+      }
+
+      function sfxFail() {
+        playTone(210, 'sawtooth', 0.22, 0.07, 130);
+      }
+
+      /* =====================================================================
+         2. 關卡資料定義 (五、六年級四大核心幾何單元)
+         ===================================================================== */
+      const LEVELS = [
+        {
+          id: 1,
+          tab: '1. 等底等高',
+          grade: '五年級｜三角形面積',
+          title: '第 1 關：等底等高變形術',
+          desc: '底邊固定長 4，調整「高 h」使面積 = 10，並左右推「頂點偏移 s」碰到星星 (3, 3)！',
+          hint: '💡 試試看：改變 s 讓三角形變斜時，面積數字完全不會變喔！',
+          params: [
+            { key: 'h', name: '三角形高 h', min: 1, max: 6, step: 0.5, init: 3, color: '#38bdf8', unit: '' },
+            { key: 's', name: '頂點偏移 s', min: -4, max: 4, step: 0.5, init: 0, color: '#fbbf24', unit: '' }
+          ],
+          getFormulaText(p) {
+            const area = (4 * p.h) / 2;
+            return `面積 = 底4 × 高${p.h} ÷ 2 = ${area}`;
+          },
+          evaluate(p) {
+            const area = (4 * p.h) / 2;
+            const topX = p.s;
+            const topY = -2 + p.h;
+            const distStar = Math.hypot(topX - 3, topY - 3);
+            const areaOk = Math.abs(area - 10) < 0.01;
+            const starOk = distStar <= 0.35;
+            return {
+              ready: areaOk && starOk,
+              pillText: areaOk && starOk ? '✅ 面積10且命中星星！' : `目前面積 ${area} (目標 10)`,
+              winSummary: `底 = 4、高 = ${p.h}，面積 = 4 × ${p.h} ÷ 2 = 10！<br>無論頂點水平偏移到哪裡，只要「等底等高」，面積永遠相等！`
+            };
+          }
+        },
+        {
+          id: 2,
+          tab: '2. 線對稱拼圖',
+          grade: '五年級｜線對稱圖形',
+          title: '第 2 關：線對稱鏡像拼圖',
+          desc: '以中央虛線 x = 0 為對稱軸，調整右半邊頂點，拼出與左半邊完全對稱的皇冠盾牌！',
+          hint: '💡 線對稱口訣：對稱點到對稱軸距離相等，且高度 (y座標) 相同！',
+          params: [
+            { key: 'xA', name: '右翼 X 座標', min: 0.5, max: 5, step: 0.5, init: 1.5, color: '#38bdf8', unit: '' },
+            { key: 'yA', name: '右翼 Y 高度', min: -1, max: 4, step: 0.5, init: 2.5, color: '#c084fc', unit: '' },
+            { key: 'xB', name: '右底 X 座標', min: 0.5, max: 5, step: 0.5, init: 4, color: '#fbbf24', unit: '' }
+          ],
+          getFormulaText(p) {
+            return `左翼(-3, 1) ↔ 右翼(${p.xA}, ${p.yA}) ｜ 左底(-2, -2) ↔ 右底(${p.xB}, -2)`;
+          },
+          evaluate(p) {
+            const wingOk = Math.abs(p.xA - 3) < 0.01 && Math.abs(p.yA - 1) < 0.01;
+            const baseOk = Math.abs(p.xB - 2) < 0.01;
+            const ready = wingOk && baseOk;
+            return {
+              ready,
+              pillText: ready ? '✅ 左右完全鏡像對稱！' : '調整右翼與右底對稱點',
+              winSummary: `左翼 (-3, 1) 的對稱點是 (3, 1)，左底 (-2, -2) 的對稱點是 (2, -2)！<br>對稱軸兩側的圖形折起來完全重合！`
+            };
+          }
+        },
+        {
+          id: 3,
+          tab: '3. 扇形雷達',
+          grade: '六年級｜圓與扇形面積',
+          title: '第 3 關：扇形雷達掃描站',
+          desc: '調整半徑 r 與圓心角 θ，掃描第一象限內全部 3 顆能量寶石，同時避開外圍紅色隕石！',
+          hint: '💡 扇形面積 ≈ 半徑 × 半徑 × 3.14 × (圓心角 ÷ 360°)',
+          params: [
+            { key: 'r', name: '扇形半徑 r', min: 1, max: 5, step: 0.5, init: 2.5, color: '#38bdf8', unit: '' },
+            { key: 'deg', name: '圓心角 θ', min: 30, max: 360, step: 30, init: 60, color: '#fbbf24', unit: '°' }
+          ],
+          getFormulaText(p) {
+            const area = (p.r * p.r * 3.14 * (p.deg / 360)).toFixed(2);
+            return `面積 ≈ ${p.r}×${p.r}×3.14×(${p.deg}°/360°) = ${area}`;
+          },
+          evaluate(p) {
+            const gems = [
+              { x: 2, y: 1 },
+              { x: 1.5, y: 3 },
+              { x: 3.2, y: 1.8 }
+            ];
+            const hazard = { x: 4.3, y: 2.2 }; // dist ~ 4.83, angle ~ 27 deg
+
+            function inSector(pt) {
+              const dist = Math.hypot(pt.x, pt.y);
+              if (dist > p.r + 0.05) return false;
+              let ang = (Math.atan2(pt.y, pt.x) * 180) / Math.PI;
+              if (ang < 0) ang += 360;
+              return ang <= p.deg + 0.5;
+            }
+
+            const hitCount = gems.filter(inSector).length;
+            const hitHazard = inSector(hazard);
+            const ready = hitCount === gems.length && !hitHazard;
+            const area = (p.r * p.r * 3.14 * (p.deg / 360)).toFixed(2);
+
+            let pillText = `掃描寶石 ${hitCount}/3`;
+            if (hitHazard) pillText = '⚠️ 半徑太大碰到隕石！';
+            else if (ready) pillText = '✅ 1/4 圓雷達鎖定成功！';
+
+            return {
+              ready,
+              hitHazard,
+              gems,
+              hazard,
+              inSector,
+              pillText,
+              winSummary: `當半徑 r = 4、圓心角 = 90°（1/4 圓）時，<br>扇形面積 ≈ 4 × 4 × 3.14 × 1/4 = ${area}，剛好包住所有寶石！`
+            };
+          }
+        },
+        {
+          id: 4,
+          tab: '4. 比例尺縮放',
+          grade: '六年級｜放大圖與縮圖',
+          title: '第 4 關：比例尺放大藍圖',
+          desc: '左側藍色小直角三角形底=2、高=2。調整「放大倍率 k」與「水平位置 x₀」，完美覆蓋右側虛線大藍圖！',
+          hint: '💡 放大或縮小圖形時，邊長會變成 k 倍，但「對應角角度」永遠不變！',
+          params: [
+            { key: 'k', name: '放大倍率 k', min: 0.5, max: 3.0, step: 0.5, init: 1.5, color: '#34d399', unit: '倍' },
+            { key: 'x0', name: '水平位置 x₀', min: -4, max: 4, step: 0.5, init: -1, color: '#38bdf8', unit: '' }
+          ],
+          getFormulaText(p) {
+            const side = 2 * p.k;
+            return `底=${side}、高=${side} (${p.k}倍放大) ｜ 內角維持 45°-45°-90°`;
+          },
+          evaluate(p) {
+            const kOk = Math.abs(p.k - 2.5) < 0.01;
+            const xOk = Math.abs(p.x0 - 1) < 0.01;
+            const ready = kOk && xOk;
+            return {
+              ready,
+              pillText: ready ? '✅ 2.5 倍放大藍圖吻合！' : `目前底高 = ${2 * p.k} (目標 5)`,
+              winSummary: `原圖底=2、高=2，放大 2.5 倍後變成底=5、高=5！<br>無論放大幾倍，等腰直角三角形的內角依然保持 45°、45°、90°！`
+            };
+          }
+        }
+      ];
+
+      /* =====================================================================
+         3. 狀態與固定座標系轉換 (鎖定 x:[-7,7], y:[-5,5] 均勻比例絕不跳動)
+         ===================================================================== */
+      const VIEW = { xMin: -7, xMax: 7, yMin: -5, yMax: 5 };
+
+      const state = {
+        levelIdx: 0,
+        values: {},
+        solvedSet: new Set()
+      };
+
+      const stageEl = document.getElementById('blueprint-stage');
+      const canvas = document.getElementById('geo-canvas');
+      const ctx = canvas.getContext('2d');
+
+      function getGridTransform(w, h) {
+        const spanX = VIEW.xMax - VIEW.xMin; // 14
+        const spanY = VIEW.yMax - VIEW.yMin; // 10
+        // 保持正方格均勻縮放，讓圓形與 45° 角完全不變形
+        const scale = Math.min(w / spanX, h / spanY);
+        const offsetX = (w - spanX * scale) / 2;
+        const offsetY = (h - spanY * scale) / 2;
+
+        return {
+          scale,
+          toPxX: (x) => offsetX + (x - VIEW.xMin) * scale,
+          toPxY: (y) => offsetY + (VIEW.yMax - y) * scale
+        };
+      }
+
+      function resizeCanvas() {
+        const rect = stageEl.getBoundingClientRect();
+        const w = Math.max(220, Math.floor(rect.width));
+        const h = Math.max(200, Math.floor(rect.height));
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+          canvas.width = w * dpr;
+          canvas.height = h * dpr;
+        }
+        renderScene();
+      }
+
+      /* =====================================================================
+         4. 畫布繪圖主引擎 (網格 + 四個關卡專屬幾何視覺化)
+         ===================================================================== */
+      function renderScene() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        if (w <= 0 || h <= 0) return;
+
+        const T = getGridTransform(w, h);
+        const lvl = LEVELS[state.levelIdx];
+        const p = state.values;
+        const evalRes = lvl.evaluate(p);
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. 建築藍圖格線 (每 1 單位一格)
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.13)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = VIEW.xMin; x <= VIEW.xMax; x++) {
+          const px = Math.round(T.toPxX(x)) + 0.5;
+          ctx.moveTo(px, T.toPxY(VIEW.yMax));
+          ctx.lineTo(px, T.toPxY(VIEW.yMin));
+        }
+        for (let y = VIEW.yMin; y <= VIEW.yMax; y++) {
+          const py = Math.round(T.toPxY(y)) + 0.5;
+          ctx.moveTo(T.toPxX(VIEW.xMin), py);
+          ctx.lineTo(T.toPxX(VIEW.xMax), py);
+        }
+        ctx.stroke();
+
+        // 2. X / Y 主座標軸
+        const ox = T.toPxX(0);
+        const oy = T.toPxY(0);
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.45)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(T.toPxX(VIEW.xMin), oy);
+        ctx.lineTo(T.toPxX(VIEW.xMax), oy);
+        ctx.moveTo(ox, T.toPxY(VIEW.yMax));
+        ctx.lineTo(ox, T.toPxY(VIEW.yMin));
+        ctx.stroke();
+
+        // 刻度數字
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+        ctx.font = 'bold 10px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let x = VIEW.xMin + 1; x <= VIEW.xMax - 1; x++) {
+          if (x === 0) continue;
+          ctx.fillText(String(x), T.toPxX(x), oy + 4);
+        }
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let y = VIEW.yMin + 1; y <= VIEW.yMax - 1; y++) {
+          if (y === 0) continue;
+          ctx.fillText(String(y), ox - 5, T.toPxY(y));
+        }
+
+        // 3. 依照關卡繪製幾何圖形
+        if (lvl.id === 1) drawLevel1(ctx, T, p, evalRes);
+        if (lvl.id === 2) drawLevel2(ctx, T, p, evalRes);
+        if (lvl.id === 3) drawLevel3(ctx, T, p, evalRes);
+        if (lvl.id === 4) drawLevel4(ctx, T, p, evalRes);
+
+        ctx.restore();
+
+        // 更新頂部公式與狀態膠囊
+        document.getElementById('formula-display').textContent = lvl.getFormulaText(p);
+        const pill = document.getElementById('goal-pill');
+        pill.textContent = evalRes.pillText;
+        pill.classList.toggle('ready', evalRes.ready);
+      }
+
+      /* --- 第 1 關繪圖：等底等高三角形 --- */
+      function drawLevel1(c, T, p, evalRes) {
+        const A = { x: -2, y: -2 };
+        const B = { x: 2, y: -2 };
+        const C = { x: p.s, y: -2 + p.h };
+
+        // 高度平行輔助虛線 (顯示等高線)
+        c.save();
+        c.strokeStyle = 'rgba(56, 189, 248, 0.38)';
+        c.setLineDash([5, 5]);
+        c.lineWidth = 1.4;
+        c.beginPath();
+        c.moveTo(T.toPxX(-6), T.toPxY(C.y));
+        c.lineTo(T.toPxX(6), T.toPxY(C.y));
+        c.stroke();
+
+        // 垂直高線 (從頂點垂直到 y = -2 延伸線)
+        c.strokeStyle = '#38bdf8';
+        c.beginPath();
+        c.moveTo(T.toPxX(C.x), T.toPxY(C.y));
+        c.lineTo(T.toPxX(C.x), T.toPxY(-2));
+        c.stroke();
+        c.setLineDash([]);
+
+        // 三角形填充
+        c.fillStyle = evalRes.ready ? 'rgba(52, 211, 153, 0.28)' : 'rgba(56, 189, 248, 0.24)';
+        c.strokeStyle = evalRes.ready ? '#34d399' : '#38bdf8';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(T.toPxX(A.x), T.toPxY(A.y));
+        c.lineTo(T.toPxX(B.x), T.toPxY(B.y));
+        c.lineTo(T.toPxX(C.x), T.toPxY(C.y));
+        c.closePath();
+        c.fill();
+        c.stroke();
+
+        // 標註底邊長 = 4 與高 = h
+        drawTag(c, T.toPxX(0), T.toPxY(-2) + 14, '底 = 4', '#f8fafc', '#1e293b');
+        drawTag(c, T.toPxX(C.x) + 26, T.toPxY(-2 + p.h / 2), `高 = ${p.h}`, '#38bdf8', '#0b1120');
+
+        // 目標星星 (3, 3)
+        drawStarIcon(c, T.toPxX(3), T.toPxY(3), evalRes.ready, '(3, 3)');
+
+        // 可移動頂點光球
+        drawHandleDot(c, T.toPxX(C.x), T.toPxY(C.y), '#fbbf24', `(${C.x}, ${C.y})`);
+        c.restore();
+      }
+
+      /* --- 第 2 關繪圖：線對稱鏡像拼圖 --- */
+      function drawLevel2(c, T, p, evalRes) {
+        c.save();
+        // 中央對稱軸 x = 0 (亮粉紅虛線)
+        c.strokeStyle = '#fb7185';
+        c.lineWidth = 2.5;
+        c.setLineDash([7, 5]);
+        c.beginPath();
+        c.moveTo(T.toPxX(0), T.toPxY(4.5));
+        c.lineTo(T.toPxX(0), T.toPxY(-4));
+        c.stroke();
+        c.setLineDash([]);
+        drawTag(c, T.toPxX(0), T.toPxY(4.4), '對稱軸 x = 0', '#fb7185', '#0b1120');
+
+        // 左半邊基準圖形：(0, 3) -> (-3, 1) -> (-2, -2) -> (0, -2)
+        const leftPts = [
+          { x: 0, y: 3 },
+          { x: -3, y: 1 },
+          { x: -2, y: -2 },
+          { x: 0, y: -2 }
+        ];
+        c.fillStyle = 'rgba(56, 189, 248, 0.28)';
+        c.strokeStyle = '#38bdf8';
+        c.lineWidth = 3;
+        c.beginPath();
+        leftPts.forEach((pt, idx) => {
+          const px = T.toPxX(pt.x);
+          const py = T.toPxY(pt.y);
+          if (idx === 0) c.moveTo(px, py);
+          else c.lineTo(px, py);
+        });
+        c.closePath();
+        c.fill();
+        c.stroke();
+
+        // 右半邊玩家鏡像圖形：(0, 3) -> (xA, yA) -> (xB, -2) -> (0, -2)
+        const rightPts = [
+          { x: 0, y: 3 },
+          { x: p.xA, y: p.yA },
+          { x: p.xB, y: -2 },
+          { x: 0, y: -2 }
+        ];
+        c.fillStyle = evalRes.ready ? 'rgba(52, 211, 153, 0.3)' : 'rgba(251, 191, 36, 0.24)';
+        c.strokeStyle = evalRes.ready ? '#34d399' : '#fbbf24';
+        c.lineWidth = 3;
+        c.beginPath();
+        rightPts.forEach((pt, idx) => {
+          const px = T.toPxX(pt.x);
+          const py = T.toPxY(pt.y);
+          if (idx === 0) c.moveTo(px, py);
+          else c.lineTo(px, py);
+        });
+        c.closePath();
+        c.fill();
+        c.stroke();
+
+        // 水平對稱連線輔助線
+        c.strokeStyle = 'rgba(192, 132, 252, 0.5)';
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.moveTo(T.toPxX(-3), T.toPxY(1));
+        c.lineTo(T.toPxX(p.xA), T.toPxY(p.yA));
+        c.moveTo(T.toPxX(-2), T.toPxY(-2));
+        c.lineTo(T.toPxX(p.xB), T.toPxY(-2));
+        c.stroke();
+        c.setLineDash([]);
+
+        // 頂點標籤
+        drawHandleDot(c, T.toPxX(-3), T.toPxY(1), '#38bdf8', '(-3, 1)');
+        drawHandleDot(c, T.toPxX(-2), T.toPxY(-2), '#38bdf8', '(-2, -2)');
+        drawHandleDot(c, T.toPxX(p.xA), T.toPxY(p.yA), '#c084fc', `(${p.xA}, ${p.yA})`);
+        drawHandleDot(c, T.toPxX(p.xB), T.toPxY(-2), '#fbbf24', `(${p.xB}, -2)`);
+        c.restore();
+      }
+
+      /* --- 第 3 關繪圖：扇形雷達與圓面積 --- */
+      function drawLevel3(c, T, p, evalRes) {
+        c.save();
+        const cx = T.toPxX(0);
+        const cy = T.toPxY(0);
+        const rPx = p.r * T.scale;
+        const radEnd = (-p.deg * Math.PI) / 180; // Canvas Y 軸向下，逆時針為負角
+
+        // 繪製外圍整圓虛線輪廓 (幫助理解扇形是圓的一部分)
+        c.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.arc(cx, cy, rPx, 0, Math.PI * 2);
+        c.stroke();
+        c.setLineDash([]);
+
+        // 繪製扇形填充
+        c.fillStyle = evalRes.hitHazard
+          ? 'rgba(251, 113, 133, 0.28)'
+          : evalRes.ready
+          ? 'rgba(52, 211, 153, 0.28)'
+          : 'rgba(56, 189, 248, 0.25)';
+        c.strokeStyle = evalRes.hitHazard ? '#fb7185' : evalRes.ready ? '#34d399' : '#38bdf8';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(cx, cy);
+        c.arc(cx, cy, rPx, 0, radEnd, true);
+        c.closePath();
+        c.fill();
+        c.stroke();
+
+        // 標註半徑 r 與圓心角 θ
+        drawTag(c, T.toPxX(p.r / 2), cy + 14, `r = ${p.r}`, '#38bdf8', '#0b1120');
+        drawTag(c, cx - 26, cy - 16, `${p.deg}°`, '#fbbf24', '#0b1120');
+
+        // 繪製 3 顆能量寶石
+        evalRes.gems.forEach((g, idx) => {
+          const hit = evalRes.inSector(g);
+          drawStarIcon(c, T.toPxX(g.x), T.toPxY(g.y), hit, `寶石${idx + 1}`);
+        });
+
+        // 繪製紅色隕石障礙物
+        const hx = T.toPxX(evalRes.hazard.x);
+        const hy = T.toPxY(evalRes.hazard.y);
+        c.fillStyle = evalRes.hitHazard ? '#ef4444' : 'rgba(239, 68, 68, 0.8)';
+        c.beginPath();
+        c.arc(hx, hy, 10, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#fff';
+        c.font = 'bold 11px sans-serif';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText('✕', hx, hy);
+        drawTag(c, hx, hy - 16, '隕石避開', '#fb7185', '#0b1120');
+
+        c.restore();
+      }
+
+      /* --- 第 4 關繪圖：比例尺放大與縮小 --- */
+      function drawLevel4(c, T, p, evalRes) {
+        c.save();
+
+        // 1. 左側基準小三角形：底=2、高=2，位於 (-6, -2), (-4, -2), (-6, 0)
+        const refPts = [
+          { x: -6, y: -2 },
+          { x: -4, y: -2 },
+          { x: -6, y: 0 }
+        ];
+        c.fillStyle = 'rgba(56, 189, 248, 0.25)';
+        c.strokeStyle = '#38bdf8';
+        c.lineWidth = 2.5;
+        c.beginPath();
+        c.moveTo(T.toPxX(refPts[0].x), T.toPxY(refPts[0].y));
+        c.lineTo(T.toPxX(refPts[1].x), T.toPxY(refPts[1].y));
+        c.lineTo(T.toPxX(refPts[2].x), T.toPxY(refPts[2].y));
+        c.closePath();
+        c.fill();
+        c.stroke();
+        drawTag(c, T.toPxX(-5), T.toPxY(-2) + 14, '原圖 底2 高2', '#38bdf8', '#0b1120');
+
+        // 2. 右側虛線目標大藍圖：底=5、高=5，位於 (1, -2), (6, -2), (1, 3)
+        const targetPts = [
+          { x: 1, y: -2 },
+          { x: 6, y: -2 },
+          { x: 1, y: 3 }
+        ];
+        c.strokeStyle = '#fbbf24';
+        c.lineWidth = 2.5;
+        c.setLineDash([6, 5]);
+        c.beginPath();
+        c.moveTo(T.toPxX(targetPts[0].x), T.toPxY(targetPts[0].y));
+        c.lineTo(T.toPxX(targetPts[1].x), T.toPxY(targetPts[1].y));
+        c.lineTo(T.toPxX(targetPts[2].x), T.toPxY(targetPts[2].y));
+        c.closePath();
+        c.stroke();
+        c.setLineDash([]);
+        drawTag(c, T.toPxX(3.5), T.toPxY(3.3), '目標藍圖：底 5、高 5', '#fbbf24', '#0b1120');
+
+        // 3. 玩家縮放三角形：左下角在 (x0, -2)，底=2k，高=2k
+        const side = 2 * p.k;
+        const userPts = [
+          { x: p.x0, y: -2 },
+          { x: p.x0 + side, y: -2 },
+          { x: p.x0, y: -2 + side }
+        ];
+        c.fillStyle = evalRes.ready ? 'rgba(52, 211, 153, 0.34)' : 'rgba(52, 211, 153, 0.22)';
+        c.strokeStyle = '#34d399';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(T.toPxX(userPts[0].x), T.toPxY(userPts[0].y));
+        c.lineTo(T.toPxX(userPts[1].x), T.toPxY(userPts[1].y));
+        c.lineTo(T.toPxX(userPts[2].x), T.toPxY(userPts[2].y));
+        c.closePath();
+        c.fill();
+        c.stroke();
+
+        // 直角符號與 45° 標註
+        const rx = T.toPxX(p.x0);
+        const ry = T.toPxY(-2);
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 1.5;
+        c.strokeRect(rx, ry - 12, 12, 12);
+        drawTag(c, T.toPxX(p.x0 + side / 2), ry + 14, `底 = ${side} (${p.k}倍)`, '#34d399', '#0b1120');
+
+        c.restore();
+      }
+
+      /* --- 繪圖小元件：標籤、光點、星星 --- */
+      function drawTag(c, x, y, text, fg, bg) {
+        c.save();
+        c.font = 'bold 11px -apple-system, sans-serif';
+        const w = c.measureText(text).width + 10;
+        const h = 18;
+        c.fillStyle = bg || 'rgba(11, 17, 32, 0.85)';
+        c.beginPath();
+        c.roundRect(x - w / 2, y - h / 2, w, h, 6);
+        c.fill();
+        c.fillStyle = fg || '#f8fafc';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(text, x, y);
+        c.restore();
+      }
+
+      function drawHandleDot(c, x, y, color, label) {
+        c.save();
+        c.fillStyle = color;
+        c.beginPath();
+        c.arc(x, y, 6.5, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = '#0b1120';
+        c.lineWidth = 2;
+        c.stroke();
+        if (label) drawTag(c, x, y - 16, label, color, 'rgba(11, 17, 32, 0.88)');
+        c.restore();
+      }
+
+      function drawStarIcon(c, cx, cy, lit, label) {
+        c.save();
+        c.beginPath();
+        c.arc(cx, cy, lit ? 15 : 11, 0, Math.PI * 2);
+        c.fillStyle = lit ? 'rgba(52, 211, 153, 0.32)' : 'rgba(251, 191, 36, 0.22)';
+        c.fill();
+
+        const spikes = 5;
+        const outerR = lit ? 10 : 8;
+        const innerR = lit ? 4.5 : 3.6;
+        let rot = (Math.PI / 2) * 3;
+        const step = Math.PI / spikes;
+
+        c.beginPath();
+        c.moveTo(cx, cy - outerR);
+        for (let i = 0; i < spikes; i++) {
+          c.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+          rot += step;
+          c.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+          rot += step;
+        }
+        c.closePath();
+        c.fillStyle = lit ? '#34d399' : '#fbbf24';
+        c.fill();
+
+        if (label) drawTag(c, cx, cy - 18, label, lit ? '#34d399' : '#fbbf24', 'rgba(11, 17, 32, 0.88)');
+        c.restore();
+      }
+
+      /* =====================================================================
+         5. UI 控制面板生成與互動邏輯
+         ===================================================================== */
+      function renderTabs() {
+        const tabsEl = document.getElementById('level-tabs');
+        tabsEl.innerHTML = '';
+        LEVELS.forEach((lvl, idx) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'level-tab';
+          if (idx === state.levelIdx) btn.classList.add('active');
+          if (state.solvedSet.has(lvl.id)) btn.classList.add('solved');
+          btn.textContent = lvl.tab;
+          btn.addEventListener('click', () => {
+            sfxTick(5);
+            loadLevel(idx);
+          });
+          tabsEl.appendChild(btn);
+        });
+      }
+
+      function loadLevel(idx) {
+        state.levelIdx = idx;
+        const lvl = LEVELS[idx];
+        state.values = {};
+        lvl.params.forEach((p) => {
+          state.values[p.key] = p.init;
+        });
+
+        document.getElementById('mission-title').textContent = lvl.title;
+        document.getElementById('grade-badge').textContent = lvl.grade;
+        document.getElementById('mission-desc').textContent = lvl.desc;
+        setFeedback(lvl.hint, 'normal');
+
+        renderTabs();
+        renderSliders();
+        renderScene();
+      }
+
+      function renderSliders() {
+        const wrap = document.getElementById('sliders-wrap');
+        wrap.innerHTML = '';
+        const lvl = LEVELS[state.levelIdx];
+
+        lvl.params.forEach((pCfg) => {
+          const row = document.createElement('div');
+          row.className = 'slider-row-card';
+          row.style.setProperty('--p-color', pCfg.color);
+
+          const meta = document.createElement('div');
+          meta.className = 'param-meta';
+          meta.innerHTML = `
+            <span class="param-name">${pCfg.name}</span>
+            <span class="param-val" id="val-${pCfg.key}">${state.values[pCfg.key]}${pCfg.unit}</span>
+          `;
+
+          const minusBtn = document.createElement('button');
+          minusBtn.type = 'button';
+          minusBtn.className = 'nudge-btn';
+          minusBtn.textContent = '−';
+          minusBtn.addEventListener('click', () => updateParam(pCfg, state.values[pCfg.key] - pCfg.step));
+
+          const slider = document.createElement('input');
+          slider.type = 'range';
+          slider.className = 'geo-slider';
+          slider.id = `slider-${pCfg.key}`;
+          slider.min = String(pCfg.min);
+          slider.max = String(pCfg.max);
+          slider.step = String(pCfg.step);
+          slider.value = String(state.values[pCfg.key]);
+          slider.addEventListener('input', () => updateParam(pCfg, parseFloat(slider.value)));
+
+          const plusBtn = document.createElement('button');
+          plusBtn.type = 'button';
+          plusBtn.className = 'nudge-btn';
+          plusBtn.textContent = '+';
+          plusBtn.addEventListener('click', () => updateParam(pCfg, state.values[pCfg.key] + pCfg.step));
+
+          row.append(meta, minusBtn, slider, plusBtn);
+          wrap.appendChild(row);
+        });
+      }
+
+      function updateParam(pCfg, rawVal) {
+        const clamped = Math.min(pCfg.max, Math.max(pCfg.min, Math.round(rawVal * 10) / 10));
+        state.values[pCfg.key] = clamped;
+
+        const sliderEl = document.getElementById(`slider-${pCfg.key}`);
+        if (sliderEl) sliderEl.value = String(clamped);
+
+        const valEl = document.getElementById(`val-${pCfg.key}`);
+        if (valEl) valEl.textContent = `${clamped}${pCfg.unit}`;
+
+        sfxTick(clamped);
+        renderScene();
+      }
+
+      function setFeedback(text, mode) {
+        const el = document.getElementById('feedback-strip');
+        el.textContent = text;
+        el.className = 'feedback-strip';
+        if (mode === 'success') el.classList.add('success');
+        if (mode === 'error') el.classList.add('error');
+      }
+
+      /* =====================================================================
+         6. 驗證建築與彩帶慶祝特效
+         ===================================================================== */
+      function verifyMission() {
+        const lvl = LEVELS[state.levelIdx];
+        const res = lvl.evaluate(state.values);
+
+        if (res.ready) {
+          sfxWin();
+          launchConfetti();
+          state.solvedSet.add(lvl.id);
+          renderTabs();
+          setFeedback('🎉 驗證成功！建築結構完全符合數學原理！', 'success');
+
+          document.getElementById('vic-title').textContent = `${lvl.title} 通關！`;
+          document.getElementById('vic-summary').innerHTML = res.winSummary;
+          const nextBtn = document.getElementById('btn-vic-next');
+          nextBtn.textContent = state.levelIdx < LEVELS.length - 1 ? '下一關任務 ➡️' : '🏆 全部通關！重玩第 1 關';
+          document.getElementById('victory-overlay').classList.add('open');
+        } else {
+          sfxFail();
+          setFeedback(`⚠️ 尚未達標：${res.pillText}，再微調滑桿試試看！`, 'error');
+        }
+      }
+
+      const fxCanvas = document.getElementById('fx-canvas');
+      const fxCtx = fxCanvas.getContext('2d');
+      let confettiAnim = null;
+
+      function launchConfetti() {
+        fxCanvas.width = window.innerWidth;
+        fxCanvas.height = window.innerHeight;
+        const colors = ['#38bdf8', '#34d399', '#fbbf24', '#c084fc', '#fb7185'];
+        const pieces = Array.from({ length: 80 }, () => ({
+          x: Math.random() * fxCanvas.width,
+          y: -20 - Math.random() * 140,
+          w: 7 + Math.random() * 6,
+          h: 5 + Math.random() * 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          vx: (Math.random() - 0.5) * 3.5,
+          vy: 3 + Math.random() * 4,
+          ang: Math.random() * 360,
+          spin: (Math.random() - 0.5) * 9
+        }));
+
+        if (confettiAnim) cancelAnimationFrame(confettiAnim);
+        function step() {
+          fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+          let active = 0;
+          pieces.forEach((p) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.ang += p.spin;
+            if (p.y < fxCanvas.height + 20) {
+              active++;
+              fxCtx.save();
+              fxCtx.translate(p.x, p.y);
+              fxCtx.rotate((p.ang * Math.PI) / 180);
+              fxCtx.fillStyle = p.color;
+              fxCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+              fxCtx.restore();
+            }
+          });
+          if (active > 0) confettiAnim = requestAnimationFrame(step);
+          else fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+        }
+        confettiAnim = requestAnimationFrame(step);
+      }
+
+      /* =====================================================================
+         7. 事件綁定與啟動
+         ===================================================================== */
+      document.getElementById('btn-sound').addEventListener('click', () => {
+        muted = !muted;
+        document.getElementById('btn-sound').textContent = muted ? '🔇' : '🔊';
+        if (!muted) sfxTick(6);
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        sfxTick(3);
+        loadLevel(state.levelIdx);
+      });
+
+      document.getElementById('btn-verify').addEventListener('click', verifyMission);
+
+      document.getElementById('btn-vic-stay').addEventListener('click', () => {
+        document.getElementById('victory-overlay').classList.remove('open');
+      });
+
+      document.getElementById('btn-vic-next').addEventListener('click', () => {
+        document.getElementById('victory-overlay').classList.remove('open');
+        const nextIdx = (state.levelIdx + 1) % LEVELS.length;
+        loadLevel(nextIdx);
+      });
+
+      window.addEventListener('resize', resizeCanvas);
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => resizeCanvas());
+        ro.observe(stageEl);
+      }
+
+      loadLevel(0);
+      resizeCanvas();
+    })();
+  </script>
+</body>
+</html>
